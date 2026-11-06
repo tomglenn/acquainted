@@ -4,7 +4,7 @@ local states = setmetatable({}, { __mode = "k" })
 local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
 local toggledAcquaintances = {}
-ns.version = "0.4.0"
+ns.version = "0.4.1"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then

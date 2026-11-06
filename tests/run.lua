@@ -86,6 +86,9 @@ local function world(saved)
             if focused and self.scripts.OnEditFocusLost then self.scripts.OnEditFocusLost(self) end
         end
         function f:SetAllPoints() end
+        function f:SetFrameLevel(value) self.frameLevel = value end
+        function f:GetFrameLevel() return self.frameLevel or 1 end
+        function f:EnableMouse(value) self.mouseEnabled = value end
         function f:SetClipsChildren(v) self.clipsChildren = v end
         function f:SetColorTexture(...) self.color = { ... } end
         function f:CreateTexture() return widget('Texture', nil, self) end
@@ -871,6 +874,9 @@ check(#matches == 1 and matches[1].guid == 'Player-1-B', 'search finds nicknames
 local briarRow = matches[1]
 click(ui, rowButton(briarRow, 'Edit nickname'))
 check(e.Acquainted_NicknameEditor.shown and e.Acquainted_NicknameInput:GetText() == 'The Scholar', 'nickname editor opens with the saved nickname')
+check(e.Acquainted_NicknameEditor.parent == ui.category.frame and e.Acquainted_NicknameEditor.point[1] == 'CENTER', 'nickname dialog is centred on the fixed canvas outside all scroll containers')
+check(e.Acquainted_NicknameEditor:GetFrameLevel() > ui.category.frame:GetFrameLevel() and e.Acquainted_NicknameEditor.mouseEnabled, 'nickname dialog renders above the settings and blocks clicks through its body')
+check(e.Acquainted_NicknameInput.font[1] == e.STANDARD_TEXT_FONT and e.Acquainted_nameOffsetValue.font[1] == e.STANDARD_TEXT_FONT, 'nickname and numeric fields have explicit readable fonts')
 e.Acquainted_NicknameInput:SetText('  The Ranger  ')
 click(ui, e.Acquainted_SaveNickname)
 check(ui.ns.db.known['Player-1-B'].nickname == 'The Ranger' and not e.Acquainted_NicknameEditor.shown, 'nickname edit saves trimmed text for the chosen GUID')

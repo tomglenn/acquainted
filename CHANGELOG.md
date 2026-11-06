@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- Open nickname editing in a centred dialog above the settings, so it cannot be hidden below the acquaintance list.
+- Explicitly set edit-box fonts so nicknames and size/position values remain readable on Forever.
+
 ## 0.4.0
 
 - Redesign settings into Appearance, Recognition, and Acquaintances tabs, with a separate Help page.
