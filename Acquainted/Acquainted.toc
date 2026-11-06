@@ -2,7 +2,7 @@
 ## Title: Acquainted
 ## Notes: Remember the people you meet. Show large overhead names without health bars. Total RP 3 is optional.
 ## Author: Acquainted contributors
-## Version: 0.3.1
+## Version: 0.3.2
 ## OptionalDeps: totalRP3
 ## Group: Acquainted
 ## SavedVariablesPerCharacter: AcquaintedDB

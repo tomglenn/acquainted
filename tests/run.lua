@@ -247,7 +247,7 @@ local function world(saved)
     return w
 end
 
-local w = world()
+local w = world({ options = { showUnmetNames = false } })
 w.requireSnapshot = true
 local unknown, npc, enemy = w:plate('stranger'), w:plate('npc'), w:plate('enemy')
 w:load()
@@ -406,7 +406,7 @@ blocked:load(); blocked:flush()
 -- Failed apply is rolled back; the blocked setting was never changed.
 blocked:restored('failed activation rolls back temporary settings')
 check(blocked.ns.db.options.enabled, 'failed activation does not erase user preference')
-local reused = world()
+local reused = world({ options = { showUnmetNames = false } })
 local reusedPlate = reused:plate('stranger')
 reused:load(); reused:flush()
 reused:command('meet')
@@ -566,13 +566,13 @@ for _, plate in ipairs({ petPlate, minionPlate, battlePlate, ownPet, orphan }) d
 end
 check(#pets:menu('PLAYER', 'petA').entries == 0, 'companion cannot be manually met instead of its owner')
 local display = world({
-    options = { fontSize = 27, nameOffset = 0, showGuild = false },
+    options = { fontSize = 27, nameOffset = 0, showGuild = false, showUnmetNames = false },
     known = { ['Player-1-B'] = { name = 'Briar Stone', nickname = 'The Scholar' } },
 })
 local strangerDisplay, metDisplay = display:plate('stranger'), display:plate('acquaintance')
 display:load(); display:flush()
 check(display.ns.db.options.fontSize == 27 and display.ns.db.options.nameOffset == 0, 'upgrade preserves existing met size and zero height')
-check(not display.ns.db.options.showUnmetNames and not display:label(strangerDisplay).shown, 'unmet names remain hidden by default after upgrade')
+check(not display.ns.db.options.showUnmetNames and not display:label(strangerDisplay).shown, 'upgrade preserves saved hidden-unmet preference')
 check(display.ns.db.options.unmetFontSize == 14 and display.ns.db.options.unmetColour == '999999', 'unmet style defaults to smaller grey text')
 local nativeWrites = display.writes
 display:option('nameOffset', -90)
@@ -654,11 +654,11 @@ click(display, namedButton('Reset met style'))
 previousSwatch(); display:flush()
 check(picker.shown and display.ns.db.options.metColour == 'FFD100', 'another addon taking over an open picker retires our callbacks without closing theirs')
 picker:Hide(); display:flush()
-check(display.ns.db.options.fontSize == 22 and display.ns.db.options.nameOffset == 16 and display.ns.db.options.metColour == 'FFD100', 'met reset restores met defaults')
+check(display.ns.db.options.fontSize == 22 and display.ns.db.options.nameOffset == -40 and display.ns.db.options.metColour == 'FFD100', 'met reset restores met defaults')
 check(display.ns.db.options.unmetColour == '804000', 'met reset preserves unmet style')
 display:option('showUnmetNames', true)
 click(display, namedButton('Reset unmet style'))
-check(display.ns.db.options.unmetFontSize == 14 and display.ns.db.options.unmetNameOffset == 16 and display.ns.db.options.unmetColour == '999999', 'unmet reset restores unmet defaults')
+check(display.ns.db.options.unmetFontSize == 14 and display.ns.db.options.unmetNameOffset == -40 and display.ns.db.options.unmetColour == '999999', 'unmet reset restores unmet defaults')
 check(display.ns.db.options.showUnmetNames, 'style-only reset preserves unmet visibility choice')
 click(display, display.env.Acquainted_metColourButton)
 local staleCancel = picker.options.cancelFunc
@@ -670,7 +670,7 @@ display:option('fontSize', 30)
 display:option('unmetColour', '123456')
 display:option('showGuild', true)
 click(display, namedButton('Reset name display'))
-check(not display.ns.db.options.showUnmetNames and display.ns.db.options.fontSize == 22 and display.ns.db.options.unmetColour == '999999', 'full display reset restores both styles and hidden-unmet default')
+check(display.ns.db.options.showUnmetNames and display.ns.db.options.fontSize == 22 and display.ns.db.options.unmetColour == '999999', 'full display reset restores both styles and visible-unmet default')
 check(display.ns.db.known['Player-1-B'].nickname == 'The Scholar' and display.ns.db.options.showGuild, 'display resets preserve acquaintances, nicknames, and recognition rules')
 check(display.writes == nativeWrites, 'all appearance edits, pickers, resets, and togglemet avoid game-setting writes')
 
@@ -694,7 +694,7 @@ invalidOptions:load(); invalidOptions:flush()
 check(invalidOptions.ns.db.options.fontSize == 22 and invalidOptions.ns.db.options.nameOffset == -200, 'startup sanitizes malformed and out-of-range numeric display options')
 check(invalidOptions.ns.db.options.metColour == 'FFD100' and invalidOptions.ns.db.options.unmetColour == 'AABBCC', 'startup validates and normalizes persisted colours')
 -- Arrival and native opacity resets must be handled before any deferred tick.
-local arrival = world()
+local arrival = world({ options = { showUnmetNames = false } })
 arrival:load(); arrival:flush()
 local arrivalWrites = arrival.writes
 local arriving = arrival:plate('stranger')
@@ -746,5 +746,12 @@ check(arriving.UnitFrame.alpha == 0.7, 'addon-list disable stops mask correction
 arrival:flush()
 arrival:fire('PLAYER_LOGOUT'); arrival:draw()
 check(arriving.UnitFrame.alpha == 0.7, 'logout stops mask correction')
+local defaults = world()
+local defaultUnmet = defaults:plate('stranger')
+defaults:load(); defaults:flush()
+check(defaults.ns.db.options.nameOffset == -40 and defaults.ns.db.options.unmetNameOffset == -40, 'new installations use lower names for both styles')
+check(defaults.ns.db.options.showUnmetNames and defaults:label(defaultUnmet).shown, 'new installations show unmet names by default')
+check(defaults:label(defaultUnmet).font[2] == 14 and defaults:label(defaultUnmet).point[5] == -40, 'default unmet name uses size 14 and height -40')
+check(defaults.ns.db.options.metColour == 'FFD100' and defaults.ns.db.options.unmetColour == '999999', 'default colours remain gold and grey')
 print('Acquainted: ' .. checks .. ' checks passed')
 return {}

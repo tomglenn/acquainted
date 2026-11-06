@@ -2,9 +2,9 @@ local _, ns = ...
 ns.defaults = {
     enabled = true, showFriends = false, showGuild = false, showGroup = false,
     useTRPRelations = true, useRPNames = true, affectEnemies = false,
-    showGuildName = true, showPetNames = true, fontSize = 22, nameOffset = 16,
-    metColour = "FFD100", showUnmetNames = false,
-    unmetFontSize = 14, unmetNameOffset = 16, unmetColour = "999999",
+    showGuildName = true, showPetNames = true, fontSize = 22, nameOffset = -40,
+    metColour = "FFD100", showUnmetNames = true,
+    unmetFontSize = 14, unmetNameOffset = -40, unmetColour = "999999",
 }
 ns.optionRanges = {
     fontSize = { 8, 48 }, unmetFontSize = { 8, 48 },

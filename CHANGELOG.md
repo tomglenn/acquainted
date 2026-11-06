@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- Set the default name height to -40 for both met and unmet players.
+- Show unmet names by default, using size 14 and grey; met names remain size 22 and gold.
+- Reset buttons use these new defaults. Existing saved preferences are preserved.
+
 ## 0.3.1
 
 - Hide native player names immediately when their nameplate appears, preventing a brief flash of the default blue name.

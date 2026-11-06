@@ -2,7 +2,7 @@
 
 *Learn their name when you meet them.*
 
-Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It hides unfamiliar players' overhead names until you choose to remember them, or optionally shows unmet names in a distinct style. Other players do not need an addon. **Total RP 3 integration is optional.**
+Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It gives met and unmet players distinct overhead name styles, with the option to hide unfamiliar players' names until you choose to remember them. Other players do not need an addon. **Total RP 3 integration is optional.**
 
 ## Features
 
@@ -13,7 +13,7 @@ Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It
 - Optional recognition of TRP3 relationships and display of RP names.
 - Pet and minion names that follow whether their owner is known.
 - Separate size, height, and colour controls for met and unmet names, with reset buttons.
-- Optional smaller grey names for people you have not met yet.
+- Smaller grey names for people you have not met yet, with an option to hide them.
 - A reversible Meet/Forget command suitable for a single keybind.
 - Restoration of the original managed game settings when disabled normally outside combat.
 
@@ -59,14 +59,14 @@ Forgetting someone removes only the manual record. Enabled friend, guild, group,
 | Show guild beneath known names | On | Display the actual game guild in angle brackets |
 | Show pet/minion names for known people | On | Display companions only when their owner is known |
 | Met name size | 22 | Adjust between 8 and 48 |
-| Met name height | 16 | Adjust between -200 and 100; negative values move the name down |
+| Met name height | -40 | Adjust between -200 and 100; negative values move the name down |
 | Met name colour | Gold | Choose with the colour picker; applies to the guild line too |
-| Show names of people you have not met | Off | Display unmet player names in their own style |
+| Show names of people you have not met | On | Display unmet player names in their own style |
 | Unmet name size | 14 | Adjust between 8 and 48 |
-| Unmet name height | 16 | Adjust independently between -200 and 100 |
+| Unmet name height | -40 | Adjust independently between -200 and 100 |
 | Unmet name colour | Grey | Choose independently with the colour picker |
 
-The **Met people** and **Unmet people** sections each have a style reset button. **Reset name display** restores both styles and the default of hiding unmet names. These buttons preserve your acquaintances, nicknames, and friend/guild/group/TRP3 recognition rules. Existing met-name size and height preferences are preserved when upgrading.
+The **Met people** and **Unmet people** sections each have a style reset button. **Reset name display** restores both styles and the default of showing unmet names. These buttons preserve your acquaintances, nicknames, and friend/guild/group/TRP3 recognition rules. Existing met-name size and height preferences are preserved when upgrading.
 
 Met styling applies to anyone recognised by an enabled visibility rule, including friends or TRP3 relationships. If unmet names are enabled, they show only the player name; their guild and companion names remain hidden. The chosen colours apply to RP names as well. Colour-picker changes preview live, and Cancel restores the previous colour.
 
