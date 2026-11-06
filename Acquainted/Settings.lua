@@ -33,13 +33,22 @@ local function Button(parent, text, width, x, y, onClick, name)
     return button
 end
 local function Input(parent, name, width, x, y)
-    local input = CreateFrame("EditBox", name, parent, "InputBoxTemplate")
+    local input = CreateFrame("EditBox", name, parent)
     input:SetSize(width, 26)
     input:SetPoint("TOPLEFT", x, y)
     input:SetAutoFocus(false)
     input:SetMaxLetters(100)
     input:SetFont(STANDARD_TEXT_FONT, 13, "")
     input:SetTextColor(1, 1, 1)
+    input:SetMultiLine(false)
+    input:SetJustifyH("LEFT")
+    input:SetJustifyV("MIDDLE")
+    input:SetTextInsets(6, 6, 2, 2)
+    Background(input, 0.4, 0.36, 0.27, 1)
+    local fill = input:CreateTexture(nil, "BORDER")
+    fill:SetPoint("TOPLEFT", 1, -1)
+    fill:SetPoint("BOTTOMRIGHT", -1, 1)
+    fill:SetColorTexture(0.025, 0.025, 0.025, 1)
     input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     return input
 end
@@ -72,8 +81,26 @@ local function Slider(parent, key, title, y, lowText, highText)
     if bottomHigh then bottomHigh:SetText(highText or tostring(range[2])) end
     local input = Input(parent, "Acquainted_" .. key .. "Value", 60, 220, y - 15)
     input:SetMaxLetters(5)
+    input:SetJustifyH("CENTER")
+    -- Render the saved value as a regular FontString while idle. This avoids
+    -- depending on the client's EditBox text layout to display numeric values.
+    local display = input:CreateFontString(nil, "OVERLAY")
+    display:SetFont(STANDARD_TEXT_FONT, 13, "")
+    display:SetPoint("CENTER", input, "CENTER", 0, 0)
+    display:SetTextColor(1, 1, 1)
+    input.valueDisplay = display
+    local function DisplayValue()
+        display:SetText(tostring(ns.db.options[key]))
+        display:SetShown(not input:HasFocus())
+        input:SetTextColor(1, 1, 1, input:HasFocus() and 1 or 0)
+    end
+    input:SetScript("OnEditFocusGained", function()
+        input:SetTextColor(1, 1, 1, 1)
+        display:Hide()
+    end)
     input:HookScript("OnShow", function(self)
         self:SetText(tostring(ns.db.options[key]))
+        DisplayValue()
     end)
     local committing
     local function Commit(self)
@@ -87,6 +114,7 @@ local function Slider(parent, key, title, y, lowText, highText)
     end
     input:SetScript("OnEnterPressed", Commit)
     input:SetScript("OnEditFocusLost", Commit)
+    input:HookScript("OnEditFocusLost", DisplayValue)
     input:SetScript("OnEscapePressed", function(self)
         self:SetText(tostring(ns.db.options[key]))
         self:ClearFocus()
@@ -286,6 +314,9 @@ function ns.RefreshSettings()
     for key, slider in pairs(sliders) do
         slider:SetValue(ns.db.options[key])
         if not values[key]:HasFocus() then values[key]:SetText(tostring(ns.db.options[key])) end
+        values[key].valueDisplay:SetText(tostring(ns.db.options[key]))
+        values[key].valueDisplay:SetShown(not values[key]:HasFocus())
+        values[key]:SetTextColor(1, 1, 1, values[key]:HasFocus() and 1 or 0)
     end
     for key, swatch in pairs(colours) do swatch:SetColorTexture(ns.ColourRGB(ns.db.options[key])) end
     RefreshPreviews()

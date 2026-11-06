@@ -79,7 +79,10 @@ local function world(saved)
         function f:SetMaxLetters(v) self.maxLetters = v end
         function f:SetEnabled(v) self.enabled = v end
         function f:HasFocus() return self.focused or false end
-        function f:SetFocus() self.focused = true end
+        function f:SetFocus()
+            self.focused = true
+            if self.scripts.OnEditFocusGained then self.scripts.OnEditFocusGained(self) end
+        end
         function f:ClearFocus()
             local focused = self.focused
             self.focused = false
@@ -93,6 +96,9 @@ local function world(saved)
         function f:SetColorTexture(...) self.color = { ... } end
         function f:CreateTexture() return widget('Texture', nil, self) end
         function f:SetJustifyH(v) self.justify = v end
+        function f:SetJustifyV(v) self.justifyV = v end
+        function f:SetTextInsets(...) self.textInsets = { ... } end
+        function f:SetMultiLine(value) self.multiline = value end
         function f:SetFont(path, size, flags) self.font = { path, size, flags }; return true end
         function f:SetTextColor(...) self.color = { ... } end
         function f:SetAlpha(v) assert(not self.forbidden, 'forbidden setter'); self.alpha = v end
@@ -817,6 +823,12 @@ for _, key in ipairs({ 'fontSize', 'nameOffset', 'unmetFontSize', 'unmetNameOffs
     value.scripts.OnShow(value)
     check(value:GetText() == tostring(ui.ns.db.options[key]), 'numeric field repopulates on show: ' .. key)
     check(value.font[1] == e.STANDARD_TEXT_FONT and value.color[1] == 1, 'numeric field has explicit readable font and colour: ' .. key)
+    check(value.template == nil and value.textInsets[1] == 6 and value.justifyV == 'MIDDLE', 'input text layout does not depend on client templates: ' .. key)
+    check(value.valueDisplay.shown and value.valueDisplay.text == tostring(ui.ns.db.options[key]), 'saved value has a visible independent text region: ' .. key)
+    value:SetFocus()
+    check(not value.valueDisplay.shown and value.color[4] == 1, 'focus switches to editable native text: ' .. key)
+    value:ClearFocus()
+    check(value.valueDisplay.shown and value.color[4] == 0, 'leaving focus returns to saved-value display without duplicate text: ' .. key)
 end
 check(e.Acquainted_AppearancePage.shown and not e.Acquainted_RecognitionPage.shown and not e.Acquainted_AcquaintancesPage.shown, 'appearance is the only initial settings page')
 local uiWrites = ui.writes

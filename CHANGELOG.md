@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3
+
+- Replace template-based text boxes with explicitly styled fields and text padding.
+- Draw saved size and height values in a separate text region while idle, switching to editable text on focus.
+
 ## 0.4.2
 
 - Refresh size and height values whenever their input fields appear. Includes the explicit edit-box font fix from 0.4.1.
