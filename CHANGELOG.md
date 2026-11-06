@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Refresh size and height values whenever their input fields appear. Includes the explicit edit-box font fix from 0.4.1.
+- Replace the startup instructions with a short welcome, addon version, and `/acq` settings shortcut.
+- Prefer `/acq` in status and help messages; `/acquainted` remains supported.
+
 ## 0.4.1
 
 - Open nickname editing in a centred dialog above the settings, so it cannot be hidden below the acquaintance list.

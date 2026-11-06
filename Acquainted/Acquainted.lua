@@ -4,12 +4,12 @@ local states = setmetatable({}, { __mode = "k" })
 local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
 local toggledAcquaintances = {}
-ns.version = "0.4.1"
+ns.version = "0.4.2"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then
         lastError = tostring(err)
-        ns.Say("A compatibility error was recorded. /acquainted status for details.")
+        ns.Say("A compatibility error was recorded. /acq status for details.")
     end
 end
 local function CanTouch(frame) return frame and not (frame.IsForbidden and frame:IsForbidden()) end
@@ -114,7 +114,7 @@ local function Service()
             elseif reason ~= "combat" then
                 active, failed = false, true
                 ns.GameSettings.Restore(db)
-                ns.Say("Could not apply name settings; filtering stopped. /acquainted status")
+                ns.Say("Could not apply name settings; filtering stopped. /acq status")
             end
         elseif not enabled then
             active = false
@@ -224,7 +224,7 @@ local function Status()
     ns.Say(count .. " people remembered by this character.")
     if next(db.restore) then ns.Say("Original game settings are saved for restoration.") end
     if not active and not next(db.restore) then ns.Say("Original game settings restored.") end
-    if not active and next(db.restore) then ns.Say("Restoration pending; finish combat and use /acquainted restore.") end
+    if not active and next(db.restore) then ns.Say("Restoration pending; finish combat and use /acq restore.") end
     if lastError then ns.Say("Last error: " .. lastError) end
 end
 local function Command(text)
@@ -239,7 +239,7 @@ local function Command(text)
         if ns.SetOption("enabled", false) then ns.Say("Restoring your original game settings.") end
     elseif command == "status" then Status()
     elseif command == "setup" then needsSetup, failed = true, false; ns.Queue()
-    elseif command == "help" then ns.Say("/acquainted opens settings. Commands: meet [nickname], forget, togglemet, on, off, toggle, restore, status, setup.")
+    elseif command == "help" then ns.Say("/acq opens settings. Commands: meet [nickname], forget, togglemet, on, off, toggle, restore, status, setup.")
     elseif ns.OpenSettings then ns.OpenSettings() end
 end
 local function Start()
@@ -267,7 +267,8 @@ local function Start()
     if not ok then ns.Error(err) end
     ns.ticker = C_Timer.NewTicker(0.25, Service)
     ns.Queue()
-    ns.Say("Loaded. /acquainted for settings; /acquainted meet to remember your target.")
+    ns.Say("Welcome to Acquainted (v" .. ns.version .. ")!")
+    ns.Say("Type |cffffd100/acq|r for settings. Happy roleplaying!")
 end
 local function Unload()
     stopping, active = true, false

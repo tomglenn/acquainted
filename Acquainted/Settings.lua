@@ -72,6 +72,9 @@ local function Slider(parent, key, title, y, lowText, highText)
     if bottomHigh then bottomHigh:SetText(highText or tostring(range[2])) end
     local input = Input(parent, "Acquainted_" .. key .. "Value", 60, 220, y - 15)
     input:SetMaxLetters(5)
+    input:HookScript("OnShow", function(self)
+        self:SetText(tostring(ns.db.options[key]))
+    end)
     local committing
     local function Commit(self)
         if refreshing or committing then return end
@@ -316,7 +319,7 @@ local function Page(name, height)
 end
 function ns.OpenSettings()
     if category and Settings.OpenToCategory then Settings.OpenToCategory(category:GetID())
-    else ns.Say("The settings panel could not load. /acquainted status shows the error; /acquainted off restores game settings.") end
+    else ns.Say("The settings panel could not load. /acq status shows the error; /acq off restores game settings.") end
 end
 function ns.CreateSettings()
     panel = CreateFrame("Frame")

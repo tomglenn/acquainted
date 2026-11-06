@@ -808,6 +808,16 @@ local ui = world({
 })
 ui:load(); ui:flush()
 local e = ui.env
+check(ui.messages[1]:find('Welcome to Acquainted (v' .. ui.ns.version .. ')!', 1, true) ~= nil, 'startup welcomes the player with the current addon version')
+check(ui.messages[2]:find('/acq|r for settings.', 1, true) ~= nil and not ui.messages[2]:find('/acquainted', 1, true), 'startup advertises the short settings command')
+for _, key in ipairs({ 'fontSize', 'nameOffset', 'unmetFontSize', 'unmetNameOffset' }) do
+    local value = e['Acquainted_' .. key .. 'Value']
+    check(value:GetText() == tostring(ui.ns.db.options[key]), 'numeric field populated on initial settings creation: ' .. key)
+    value:SetText('')
+    value.scripts.OnShow(value)
+    check(value:GetText() == tostring(ui.ns.db.options[key]), 'numeric field repopulates on show: ' .. key)
+    check(value.font[1] == e.STANDARD_TEXT_FONT and value.color[1] == 1, 'numeric field has explicit readable font and colour: ' .. key)
+end
 check(e.Acquainted_AppearancePage.shown and not e.Acquainted_RecognitionPage.shown and not e.Acquainted_AcquaintancesPage.shown, 'appearance is the only initial settings page')
 local uiWrites = ui.writes
 local metPreview, unmetPreview
