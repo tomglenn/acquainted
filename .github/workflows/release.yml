@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag, for example v0.2.5'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - name: Install Lua
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lua5.4
+      - name: Check addon behavior
+        run: lua5.4 tests/run.lua
+      - name: Check installer and packaging
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Validate release version and build ZIP
+        run: python3 scripts/package.py --tag "$RELEASE_TAG"
+      - name: Publish installable assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="dist/Acquainted-${RELEASE_TAG#v}-Forever.zip"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$archive" dist/SHA256SUMS --clobber
+          else
+            options=()
+            if [[ "$RELEASE_TAG" == *-* ]]; then
+              options+=(--prerelease)
+            fi
+            gh release create "$RELEASE_TAG" "$archive" dist/SHA256SUMS \
+              --verify-tag --title "Acquainted ${RELEASE_TAG#v}" \
+              --notes-file dist/RELEASE_NOTES.md "${options[@]}"
+          fi

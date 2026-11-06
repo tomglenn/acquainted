@@ -1,0 +1,17 @@
+## Interface: 16001
+## Title: Acquainted
+## Notes: Remember the people you meet. Show large overhead names without health bars. Total RP 3 is optional.
+## Author: Acquainted contributors
+## Version: 0.2.5
+## OptionalDeps: totalRP3
+## Group: Acquainted
+## SavedVariablesPerCharacter: AcquaintedDB
+## Category: Roleplay
+## Category-enUS: Roleplay
+## IconTexture: Interface\Icons\INV_Misc_Book_09
+
+Policy.lua
+GameSettings.lua
+Settings.lua
+ContextMenus.lua
+Acquainted.lua

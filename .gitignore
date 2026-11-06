@@ -1,0 +1,15 @@
+# Generated files and local installation backups
+.DS_Store
+__pycache__/
+*.py[cod]
+*.zip
+dist/
+.local-backups/
+backups/
+
+# Local configuration and game data
+.env
+.env.*
+WTF/
+SavedVariables/
+*.log

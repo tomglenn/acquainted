@@ -1,0 +1,28 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install Lua
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lua5.4
+      - name: Check addon behavior
+        run: lua5.4 tests/run.lua
+      - name: Check installer and packaging
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Build installable ZIP
+        run: python3 scripts/package.py
