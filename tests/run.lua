@@ -220,7 +220,15 @@ local function world(saved)
         self.plates[#self.plates + 1] = p
         return p
     end
-    env.C_NamePlate = { GetNamePlates = function() return w.plates end }
+    env.C_NamePlate = {
+        GetNamePlates = function() return w.plates end,
+        GetNamePlateForUnit = function(token)
+            for _, plate in ipairs(w.plates) do
+                if (plate.namePlateUnitToken or plate.UnitFrame.unit) == token then return plate end
+            end
+        end,
+    }
+    function w:draw() self.events.scripts.OnUpdate(self.events, 1 / 60) end
     function w:label(p) return p.labels and p.labels[1] end
     function w:load()
         for _, file in ipairs({ 'Policy.lua', 'GameSettings.lua', 'Settings.lua', 'ContextMenus.lua', 'Acquainted.lua' }) do
@@ -685,5 +693,58 @@ local invalidOptions = world({ options = { fontSize = 'bad', nameOffset = -500, 
 invalidOptions:load(); invalidOptions:flush()
 check(invalidOptions.ns.db.options.fontSize == 22 and invalidOptions.ns.db.options.nameOffset == -200, 'startup sanitizes malformed and out-of-range numeric display options')
 check(invalidOptions.ns.db.options.metColour == 'FFD100' and invalidOptions.ns.db.options.unmetColour == 'AABBCC', 'startup validates and normalizes persisted colours')
+-- Arrival and native opacity resets must be handled before any deferred tick.
+local arrival = world()
+arrival:load(); arrival:flush()
+local arrivalWrites = arrival.writes
+local arriving = arrival:plate('stranger')
+arrival:fire('NAME_PLATE_UNIT_ADDED', 'stranger')
+check(arriving.UnitFrame.alpha == 0, 'new unknown plate is masked inside the arrival event')
+check(not arrival:label(arriving).shown, 'arrival cannot briefly reveal an unknown name')
+check(arrival.writes == arrivalWrites, 'immediate arrival handling writes no game settings')
+arrival:flush()
+arriving.UnitFrame:SetAlpha(1)
+arrival:draw()
+check(arriving.UnitFrame.alpha == 0, 'native alpha reset is masked before drawing without a timer tick')
+arrival:command('meet')
+arriving.UnitFrame:SetAlpha(0.6)
+arrival:draw()
+check(arriving.UnitFrame.alpha == 0 and arrival:label(arriving).shown, 'per-frame mask preserves custom met name')
+check(arriving.labels[2].shown, 'per-frame mask preserves custom guild')
+arrival.combat = true
+arriving.UnitFrame:SetAlpha(1); arrival:draw()
+check(arriving.UnitFrame.alpha == 0 and arrival.writes == arrivalWrites, 'combat mask correction needs no CVar writes')
+arrival.combat = false
+arrival.plates = {}
+arrival:fire('NAME_PLATE_UNIT_REMOVED', 'stranger')
+check(not arrival:label(arriving).shown and not arriving.labels[2].shown, 'removal clears custom name and guild before deferred refresh')
+check(arriving.UnitFrame.alpha == 1, 'removal restores latest native opacity for frame reuse')
+arrival:draw()
+check(arriving.UnitFrame.alpha == 1, 'removed plate no longer receives per-frame masking')
+arrival.plates = { arriving }
+arriving.UnitFrame.unit = 'npc'
+arrival:fire('NAME_PLATE_UNIT_ADDED', 'npc')
+check(arriving.UnitFrame.alpha == 1 and not arrival:label(arriving).shown, 'immediate NPC reuse remains native')
+arriving.UnitFrame.unit = 'acquaintance'
+arrival:fire('NAME_PLATE_UNIT_ADDED', 'acquaintance')
+check(arriving.UnitFrame.alpha == 0 and not arrival:label(arriving).shown, 'reused frame immediately masks a different unknown player')
+arriving.UnitFrame.forbidden = true; arriving.UnitFrame.alpha = 0.4
+arrival:draw()
+check(arriving.UnitFrame.alpha == 0.4, 'draw check skips forbidden native frames')
+arriving.UnitFrame.forbidden = false
+arrival:draw()
+check(arriving.UnitFrame.alpha == 0, 'mask correction resumes when native frame becomes accessible')
+arrival:fire('NAME_PLATE_UNIT_ADDED', 'missing')
+check(arrival.writes == arrivalWrites and #arrival.pending == 1, 'missing and repeated arrival events remain coalesced without CVar writes')
+arrival:command('off'); arrival:draw()
+check(arriving.UnitFrame.alpha == 0.4, 'disabled draw check leaves restored native opacity intact')
+arrival:restored('arrival fix preserves exact game-setting restoration')
+arrival:command('on')
+arrival.env.C_AddOns.DisableAddOn('Acquainted')
+arriving.UnitFrame:SetAlpha(0.7); arrival:draw()
+check(arriving.UnitFrame.alpha == 0.7, 'addon-list disable stops mask correction immediately')
+arrival:flush()
+arrival:fire('PLAYER_LOGOUT'); arrival:draw()
+check(arriving.UnitFrame.alpha == 0.7, 'logout stops mask correction')
 print('Acquainted: ' .. checks .. ' checks passed')
 return {}

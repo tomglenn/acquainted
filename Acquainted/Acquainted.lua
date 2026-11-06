@@ -4,7 +4,7 @@ local states = setmetatable({}, { __mode = "k" })
 local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
 local toggledAcquaintances = {}
-ns.version = "0.3.0"
+ns.version = "0.3.1"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then
@@ -54,6 +54,7 @@ local function Render(plate, visited)
     else state.alpha = frame:GetAlpha() end
     state.label:Hide()
     state.guildLabel:Hide()
+    state.unit = unit
     if not SetAlpha(state, 0) then return end
     state.masked = true
     local known, name
@@ -84,15 +85,18 @@ local function Render(plate, visited)
         state.guildLabel:Show()
     end
 end
+local function RenderPlate(plate, visited)
+    local ok, err = pcall(Render, plate, visited or {})
+    if not ok then
+        ns.Error(err)
+        local state = CanTouch(plate) and states[plate.UnitFrame]
+        if state then RestoreVisual(state) end
+    end
+end
 local function RenderAll()
     local visited = {}
     for _, plate in ipairs(C_NamePlate.GetNamePlates(false)) do
-        local ok, err = pcall(Render, plate, visited)
-        if not ok then
-            ns.Error(err)
-            local state = CanTouch(plate) and states[plate.UnitFrame]
-            if state then RestoreVisual(state) end
-        end
+        RenderPlate(plate, visited)
     end
     for _, state in pairs(states) do if not visited[state] then RestoreVisual(state) end end
 end
@@ -258,11 +262,39 @@ local function Unload()
     RestoreVisuals()
     ns.GameSettings.Restore(db, true)
 end
-events:SetScript("OnEvent", function(_, event)
+-- WoW can reset a native frame's alpha between our slower policy refreshes.
+-- Reassert only existing masks before drawing; never write CVars here or hook
+-- native setters (which can recurse through the client's nameplate updates).
+events:SetScript("OnUpdate", function()
+    if not active or stopping or suspended or servicing or not db.options.enabled then return end
+    for _, state in pairs(states) do
+        if state.masked and CanTouch(state.frame) then
+            local observed = state.frame:GetAlpha()
+            if ns.IsReadable(observed) and observed ~= 0 then
+                state.alpha = observed
+                SetAlpha(state, 0)
+            end
+        end
+    end
+end)
+events:SetScript("OnEvent", function(_, event, unit)
     if event == "PLAYER_LOGIN" then Start()
     elseif not db then return
     elseif event == "PLAYER_LOGOUT" or event == "ADDONS_UNLOADING" then Unload()
-    else ns.Queue() end
+    else
+        if active and not suspended and not servicing and not stopping and db.options.enabled then
+            if event == "NAME_PLATE_UNIT_ADDED" and unit then
+                -- Mask a newly assigned plate in this event, before the next
+                -- frame, rather than waiting for the deferred settings service.
+                RenderPlate(C_NamePlate.GetNamePlateForUnit(unit, false))
+            elseif event == "NAME_PLATE_UNIT_REMOVED" and unit then
+                for _, state in pairs(states) do
+                    if state.unit == unit then RestoreVisual(state); state.unit = nil end
+                end
+            end
+        end
+        ns.Queue()
+    end
 end)
 for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_LOGOUT", "ADDONS_UNLOADING", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
     "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "PLAYER_TARGET_CHANGED", "UNIT_NAME_UPDATE",

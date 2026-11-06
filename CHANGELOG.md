@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Hide native player names immediately when their nameplate appears, preventing a brief flash of the default blue name.
+- Reapply existing nameplate masks each frame when WoW resets their opacity.
+- Clear custom names immediately when a nameplate is removed or reused.
+
 ## 0.3.0
 
 - Add separate size, height, and colour settings for met and unmet players.
