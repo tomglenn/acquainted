@@ -14,10 +14,10 @@ The workflows do not publish to CurseForge. Upload the generated ZIP there separ
    ```sh
    lua tests/run.lua
    python3 -m unittest discover -s tests -p 'test_*.py'
-   python3 scripts/package.py --tag v0.2.5
+   python3 scripts/package.py --tag v0.3.0
    ```
 
-   Replace `v0.2.5` with the version being released. The tag must match the two source version fields and changelog. Build output is placed in `dist/`.
+   Replace `v0.3.0` with the version being released. The tag must match the two source version fields and changelog. Build output is placed in `dist/`.
 
 5. Commit and push those changes to `main`.
 
@@ -26,11 +26,11 @@ Use a new version/tag for each release. Do not move an already published tag to 
 ## Option 1: Use GitHub's website
 
 1. Open the repository's **Releases** page and choose **Draft a new release**.
-2. Choose a tag such as `v0.2.5`. Create it against the tested `main` commit if it does not exist.
-3. Enter a title, for example **Acquainted 0.2.5**, and paste the matching changelog entry.
+2. Choose a tag such as `v0.3.0`. Create it against the tested `main` commit if it does not exist.
+3. Enter a title, for example **Acquainted 0.3.0**, and paste the matching changelog entry.
 4. Mark the release as a prerelease when appropriate, then publish it.
 5. Open **Actions → Release** and wait for the workflow to complete.
-6. Return to the release. Its assets will include `Acquainted-0.2.5-Forever.zip` and `SHA256SUMS`.
+6. Return to the release. Its assets will include `Acquainted-0.3.0-Forever.zip` and `SHA256SUMS`.
 
 The installable ZIP is the attached **Acquainted** asset, rather than GitHub's automatically generated source archive.
 
@@ -39,8 +39,8 @@ The installable ZIP is the attached **Acquainted** asset, rather than GitHub's a
 After the version changes have been committed and pushed:
 
 ```sh
-git tag v0.2.5
-git push origin v0.2.5
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 This runs the same checks, creates a GitHub Release if needed, and attaches the ZIP and checksum. Notes come from the corresponding changelog section. Tags such as `v0.3.0-beta.1` produce prereleases when the source version is `0.3.0-beta.1`.

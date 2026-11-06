@@ -97,7 +97,7 @@ def build(root: Path, output: Path, tag: str | None = None) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tag", help="Optional version tag, such as v0.2.5")
+    parser.add_argument("--tag", help="Optional version tag, such as v0.3.0")
     parser.add_argument("--output-dir", type=Path, help="Output directory; defaults to dist")
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent

@@ -3,7 +3,50 @@ ns.defaults = {
     enabled = true, showFriends = false, showGuild = false, showGroup = false,
     useTRPRelations = true, useRPNames = true, affectEnemies = false,
     showGuildName = true, showPetNames = true, fontSize = 22, nameOffset = 16,
+    metColour = "FFD100", showUnmetNames = false,
+    unmetFontSize = 14, unmetNameOffset = 16, unmetColour = "999999",
 }
+ns.optionRanges = {
+    fontSize = { 8, 48 }, unmetFontSize = { 8, 48 },
+    nameOffset = { -200, 100 }, unmetNameOffset = { -200, 100 },
+}
+
+function ns.NormalizeHex(value)
+    if type(value) ~= "string" then return nil end
+    value = value:gsub("^#", "")
+    if value:match("^%x%x%x%x%x%x$") then return value:upper() end
+end
+
+function ns.NormalizeOption(key, value)
+    if ns.defaults[key] == nil or type(value) ~= type(ns.defaults[key]) then return nil end
+    if key == "metColour" or key == "unmetColour" then return ns.NormalizeHex(value) end
+    local range = ns.optionRanges[key]
+    if range then
+        if value ~= value or value == math.huge or value == -math.huge then return nil end
+        return math.max(range[1], math.min(range[2], math.floor(value)))
+    end
+    return value
+end
+
+function ns.ColourRGB(hex)
+    return tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255
+end
+
+function ns.ColourHex(r, g, b)
+    local function Byte(value) return math.floor(math.max(0, math.min(1, value)) * 255 + 0.5) end
+    return string.format("%02X%02X%02X", Byte(r), Byte(g), Byte(b))
+end
+
+function ns.Appearance(known, options)
+    local size = known and options.fontSize or options.unmetFontSize
+    local height = known and options.nameOffset or options.unmetNameOffset
+    local colour = known and options.metColour or options.unmetColour
+    return size, height, ns.ColourRGB(colour)
+end
+
+function ns.WithoutColourCodes(text)
+    return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[%w_]+:", ""):gsub("|r", ""))
+end
 function ns.IsReadable(value)
     return not (issecretvalue and issecretvalue(value))
 end

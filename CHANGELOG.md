@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Add separate size, height, and colour settings for met and unmet players.
+- Allow name heights from -200 to 100, so names can be moved below the previous zero limit.
+- Add optional display of unmet players' names, using smaller grey text by default.
+- Add reset buttons for each style and for all name-display settings.
+- Add `/acq togglemet` to switch the targeted player's saved Meet/Forget state with one command.
+- Preserve existing met-name size, height, acquaintances, and recognition settings when upgrading.
+
 ## 0.2.5
 
 - Prepare the standalone Acquainted source repository and public documentation.

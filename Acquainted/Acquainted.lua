@@ -3,7 +3,8 @@ local events = CreateFrame("Frame")
 local states = setmetatable({}, { __mode = "k" })
 local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
-ns.version = "0.2.5"
+local toggledAcquaintances = {}
+ns.version = "0.3.0"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then
@@ -61,22 +62,24 @@ local function Render(plate, visited)
         name = known and ns.CompanionName(unit)
     else
         known = ns.Known(unit, db)
-        name = known and ns.DisplayName(unit, db)
+        if known or db.options.showUnmetNames then name = ns.DisplayName(unit, db) end
     end
-    if not known then return end
+    -- Unmet player names can be styled, but unknown owners' pets remain hidden.
+    if not known and (companion or not db.options.showUnmetNames) then return end
     if not name or name == "" then return end
-    state.label:SetFont(STANDARD_TEXT_FONT, db.options.fontSize, "OUTLINE")
+    local fontSize, height, r, g, b = ns.Appearance(known, db.options)
+    state.label:SetFont(STANDARD_TEXT_FONT, fontSize, "OUTLINE")
     state.label:ClearAllPoints()
-    state.label:SetPoint("BOTTOM", plate, "TOP", 0, db.options.nameOffset)
-    state.label:SetTextColor(1, 0.82, 0)
-    state.label:SetText(name)
+    state.label:SetPoint("BOTTOM", plate, "TOP", 0, height)
+    state.label:SetTextColor(r, g, b)
+    state.label:SetText(ns.WithoutColourCodes(name))
     state.label:Show()
-    local guild = not companion and db.options.showGuildName and ns.GuildName(unit)
+    local guild = known and not companion and db.options.showGuildName and ns.GuildName(unit)
     if guild then
-        state.guildLabel:SetFont(STANDARD_TEXT_FONT, math.max(12, math.floor(db.options.fontSize * 0.8)), "OUTLINE")
+        state.guildLabel:SetFont(STANDARD_TEXT_FONT, math.max(8, math.floor(fontSize * 0.8)), "OUTLINE")
         state.guildLabel:ClearAllPoints()
         state.guildLabel:SetPoint("TOP", state.label, "BOTTOM", 0, -2)
-        state.guildLabel:SetTextColor(1, 0.82, 0)
+        state.guildLabel:SetTextColor(r, g, b)
         state.guildLabel:SetText("<" .. guild .. ">")
         state.guildLabel:Show()
     end
@@ -132,17 +135,31 @@ function ns.SetOption(key, value)
         ns.Say("Finish combat first so your game settings can be restored.")
         return false
     end
-    if ns.defaults[key] == nil or type(value) ~= type(ns.defaults[key]) then return false end
-    if key == "fontSize" then value = math.max(12, math.min(40, math.floor(value))) end
-    if key == "nameOffset" then value = math.max(0, math.min(40, math.floor(value))) end
+    value = ns.NormalizeOption(key, value)
+    if value == nil then return false end
+    if key == "enabled" and not value and ns.CloseColourPicker then ns.CloseColourPicker() end
     db.options[key] = value
     if key == "enabled" or key == "affectEnemies" then needsSetup, failed = true, false end
     ns.Queue()
     if ns.RefreshSettings then ns.RefreshSettings() end
     return true
 end
+function ns.ResetAppearance(which)
+    local keys
+    if which == "met" then keys = { "fontSize", "nameOffset", "metColour" }
+    elseif which == "unmet" then keys = { "unmetFontSize", "unmetNameOffset", "unmetColour" }
+    elseif which == "all" then
+        keys = { "fontSize", "nameOffset", "metColour", "unmetFontSize", "unmetNameOffset", "unmetColour", "showUnmetNames" }
+    else return false end
+    if ns.CloseColourPicker then ns.CloseColourPicker() end
+    for _, key in ipairs(keys) do db.options[key] = ns.defaults[key] end
+    ns.Queue()
+    if ns.RefreshSettings then ns.RefreshSettings() end
+    return true
+end
 function ns.SetRemembered(guid, name, forget, nickname)
     if not guid or not name then return end
+    toggledAcquaintances[guid] = nil
     if forget then
         db.known[guid] = nil
         ns.Say("Forgot " .. name .. ".")
@@ -160,12 +177,24 @@ function ns.RememberTarget(forget, nickname)
     if not accessible or not isOther then ns.Say("Target another player first."); return end
     local ok, guid, name = pcall(ns.Identity, "target")
     if not ok or not guid then ns.Say("That player's identity is not available yet."); return end
+    if forget == "toggle" then
+        local previous = db.known[guid]
+        if previous then
+            ns.SetRemembered(guid, name, true)
+            toggledAcquaintances[guid] = previous
+        else
+            local cached = toggledAcquaintances[guid]
+            ns.SetRemembered(guid, name, false, cached and cached.nickname)
+        end
+        return
+    end
     ns.SetRemembered(guid, name, forget, nickname)
 end
 function ns.IsEnabled()
     return db and db.options.enabled and not suspended and not stopping
 end
 function ns.Forget(guid)
+    toggledAcquaintances[guid] = nil
     db.known[guid] = nil
     ns.Queue()
     if ns.RefreshSettings then ns.RefreshSettings() end
@@ -187,11 +216,12 @@ local function Command(text)
         ns.SetOption("enabled", command == "on" or (command == "toggle" and not db.options.enabled))
     elseif command == "meet" or command == "remember" then ns.RememberTarget(false, rest)
     elseif command == "forget" then ns.RememberTarget(true)
+    elseif command == "togglemet" then ns.RememberTarget("toggle")
     elseif command == "restore" then
         if ns.SetOption("enabled", false) then ns.Say("Restoring your original game settings.") end
     elseif command == "status" then Status()
     elseif command == "setup" then needsSetup, failed = true, false; ns.Queue()
-    elseif command == "help" then ns.Say("/acquainted opens settings. Commands: meet [nickname], forget, on, off, restore, status, setup.")
+    elseif command == "help" then ns.Say("/acquainted opens settings. Commands: meet [nickname], forget, togglemet, on, off, toggle, restore, status, setup.")
     elseif ns.OpenSettings then ns.OpenSettings() end
 end
 local function Start()
@@ -202,7 +232,11 @@ local function Start()
         if db.restore[key] == nil then db.restore[key] = original end
     end
     db.cvars = nil
-    for key, value in pairs(ns.defaults) do if db.options[key] == nil then db.options[key] = value end end
+    for key, value in pairs(ns.defaults) do
+        local normalized = ns.NormalizeOption(key, db.options[key])
+        if normalized == nil then normalized = value end
+        db.options[key] = normalized
+    end
     if db.enabled ~= nil then db.options.enabled = db.enabled; db.enabled = nil end
     db.schema = 2
     ns.db = db
@@ -219,6 +253,7 @@ local function Start()
 end
 local function Unload()
     stopping, active = true, false
+    if ns.CloseColourPicker then ns.CloseColourPicker() end
     if ns.ticker then ns.ticker:Cancel() end
     RestoreVisuals()
     ns.GameSettings.Restore(db, true)

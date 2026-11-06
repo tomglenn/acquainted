@@ -1,6 +1,7 @@
 local _, ns = ...
 local panel, category, refreshing
-local checks, sliders, rows = {}, {}, {}
+local checks, sliders, rows, colours = {}, {}, {}, {}
+local pickerSession, pickerHooked
 
 local function Text(parent, text, font, x, y, width)
     local label = parent:CreateFontString(nil, "ARTWORK", font or "GameFontHighlight")
@@ -10,8 +11,8 @@ local function Text(parent, text, font, x, y, width)
     return label
 end
 
-local function Button(parent, text, width, x, y, onClick)
-    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+local function Button(parent, text, width, x, y, onClick, name)
+    local button = CreateFrame("Button", name, parent, "UIPanelButtonTemplate")
     button:SetSize(width, 24)
     button:SetPoint("TOPLEFT", x, y)
     button:SetText(text)
@@ -49,11 +50,78 @@ local function Slider(key, title, low, high, x, y)
     sliders[key] = slider
 end
 
+function ns.CloseColourPicker()
+    if not pickerSession then return end
+    pickerSession.active = false
+    pickerSession = nil
+    if ColorPickerFrame and ColorPickerFrame:IsShown() then ColorPickerFrame:Hide() end
+end
+
+local function PickColour(key)
+    local picker = ColorPickerFrame
+    if not picker or not picker.SetupColorPickerAndShow then
+        ns.Error("The client colour picker is unavailable.")
+        return
+    end
+    ns.CloseColourPicker()
+    local before = ns.db.options[key]
+    local session = { active = true }
+    pickerSession = session
+    -- A shared picker may be opened by another addon later. Retire our session
+    -- after Hide's accept/cancel callbacks finish, without changing the widget.
+    if not pickerHooked then
+        -- Another addon can reuse the picker without hiding it first. Observe
+        -- setup ownership only; this callback never calls a widget method.
+        hooksecurefunc(picker, "SetupColorPickerAndShow", function(_, options)
+            if pickerSession and pickerSession.options ~= options then
+                pickerSession.active = false
+                pickerSession = nil
+            end
+        end)
+        picker:HookScript("OnHide", function()
+            local closing = pickerSession
+            if closing then
+                C_Timer.After(0, function()
+                    closing.active = false
+                    if pickerSession == closing then pickerSession = nil end
+                end)
+            end
+        end)
+        pickerHooked = true
+    end
+    local r, g, b = ns.ColourRGB(before)
+    local options = {
+        r = r, g = g, b = b, hasOpacity = false,
+        swatchFunc = function()
+            if session.active then ns.SetOption(key, ns.ColourHex(picker:GetColorRGB())) end
+        end,
+        cancelFunc = function()
+            if session.active then
+                session.active = false
+                if pickerSession == session then pickerSession = nil end
+                ns.SetOption(key, before)
+            end
+        end,
+    }
+    session.options = options
+    local ok, err = pcall(picker.SetupColorPickerAndShow, picker, options)
+    if not ok then ns.CloseColourPicker(); ns.Error(err) end
+end
+
+local function ColourButton(key, title, x, y)
+    local button = Button(panel, title, 240, x, y, function() PickColour(key) end, "Acquainted_" .. key .. "Button")
+    colours[key] = { button = button, title = title }
+end
+
 function ns.RefreshSettings()
     if not panel or refreshing then return end
     refreshing = true
     for key, button in pairs(checks) do button:SetChecked(ns.db.options[key]) end
     for key, slider in pairs(sliders) do slider:SetValue(ns.db.options[key]) end
+    for key, control in pairs(colours) do
+        local hex = ns.db.options[key]
+        control.button:SetText(control.title .. ": |cff" .. hex .. "#" .. hex .. "|r")
+    end
     for _, row in ipairs(rows) do row:Hide() end
     local people = {}
     for guid, record in pairs(ns.db.known) do
@@ -91,7 +159,7 @@ function ns.CreateSettings()
     outerScroll:SetPoint("TOPLEFT", 0, 0)
     outerScroll:SetPoint("BOTTOMRIGHT", -30, 0)
     panel = CreateFrame("Frame", nil, outerScroll)
-    panel:SetSize(640, 810)
+    panel:SetSize(640, 1110)
     outerScroll:SetScrollChild(panel)
     Text(panel, "Acquainted", "GameFontNormalLarge", 16, -16)
     Text(panel, "Names appear when you remember someone. They do not need an addon.", nil, 16, -46, 600)
@@ -105,24 +173,36 @@ function ns.CreateSettings()
     Checkbox("affectEnemies", "Also filter enemy players (hides their player health bars too)", -286)
     Checkbox("showGuildName", "Show guild beneath known names", -318)
     Checkbox("showPetNames", "Show pet/minion names for known people", -350)
-    Text(panel, "Appearance", "GameFontNormal", 16, -401)
-    Slider("fontSize", "Name size", 12, 40, 22, -444)
-    Slider("nameOffset", "Height above head", 0, 40, 330, -444)
-    Text(panel, "People remembered by this character", "GameFontNormal", 16, -504)
-    Button(panel, "Remember target", 155, 16, -530, function() ns.RememberTarget(false) end)
-    Button(panel, "Forget target", 135, 180, -530, function() ns.RememberTarget(true) end)
-    Button(panel, "Disable and restore", 180, 325, -530, function() ns.SetOption("enabled", false) end)
+    Text(panel, "Met people", "GameFontNormal", 16, -401)
+    Slider("fontSize", "Name size", 8, 48, 22, -444)
+    Slider("nameOffset", "Name height", -200, 100, 330, -444)
+    ColourButton("metColour", "Met name colour", 22, -486)
+    Button(panel, "Reset met style", 240, 330, -486, function() ns.ResetAppearance("met") end)
+    Text(panel, "Negative height values move names down, below the old zero limit.", nil, 16, -520, 600)
+    Text(panel, "Unmet people", "GameFontNormal", 16, -556)
+    Checkbox("showUnmetNames", "Show names of people you have not met", -578)
+    Slider("unmetFontSize", "Name size", 8, 48, 22, -638)
+    Slider("unmetNameOffset", "Name height", -200, 100, 330, -638)
+    ColourButton("unmetColour", "Unmet name colour", 22, -680)
+    Button(panel, "Reset unmet style", 240, 330, -680, function() ns.ResetAppearance("unmet") end)
+    Text(panel, "Unmet names use the second style when enabled. Their guild and pet names stay hidden.", nil, 16, -716, 600)
+    Button(panel, "Reset name display", 240, 16, -752, function() ns.ResetAppearance("all") end)
+    Text(panel, "Resets display only; keeps acquaintances and recognition rules.", nil, 272, -757, 330)
+    Text(panel, "People remembered by this character", "GameFontNormal", 16, -802)
+    Button(panel, "Remember target", 155, 16, -828, function() ns.RememberTarget(false) end)
+    Button(panel, "Forget target", 135, 180, -828, function() ns.RememberTarget(true) end)
+    Button(panel, "Disable and restore", 180, 325, -828, function() ns.SetOption("enabled", false) end)
     local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 16, -570)
+    scroll:SetPoint("TOPLEFT", 16, -868)
     scroll:SetSize(560, 120)
     panel.listContent = CreateFrame("Frame", nil, scroll)
     panel.listContent:SetSize(550, 115)
     scroll:SetScrollChild(panel.listContent)
     panel.empty = Text(panel.listContent, "No one remembered yet. Target a player and click Remember target.", nil, 4, -6, 540)
-    Text(panel, "Right-click a player's portrait for Meet / Forget, or use /acquainted meet [nickname].", nil, 16, -709, 600)
-    Text(panel, "Names use Blizzard's available nameplate range. Chat and tooltips still show names.", nil, 16, -732, 600)
-    Text(panel, "Other enabled visibility rules can still reveal someone you forget.", nil, 16, -755, 600)
-    Text(panel, "Pet filtering also hides ordinary critter names while Acquainted is active.", nil, 16, -778, 600)
+    Text(panel, "Use /acq togglemet as a reversible Meet / Forget keybind for your target.", nil, 16, -1007, 600)
+    Text(panel, "Names use Blizzard's available nameplate range. Chat and tooltips still show names.", nil, 16, -1030, 600)
+    Text(panel, "Other enabled visibility rules can still reveal someone you forget.", nil, 16, -1053, 600)
+    Text(panel, "Pet filtering also hides ordinary critter names while Acquainted is active.", nil, 16, -1076, 600)
     category = Settings.RegisterCanvasLayoutCategory(canvas, "Acquainted")
     Settings.RegisterAddOnCategory(category)
     panel:SetScript("OnShow", ns.RefreshSettings)

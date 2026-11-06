@@ -2,7 +2,7 @@
 
 *Learn their name when you meet them.*
 
-Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It hides unfamiliar players' overhead names until you choose to remember them. Other players do not need an addon. **Total RP 3 integration is optional.**
+Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It hides unfamiliar players' overhead names until you choose to remember them, or optionally shows unmet names in a distinct style. Other players do not need an addon. **Total RP 3 integration is optional.**
 
 ## Features
 
@@ -12,7 +12,9 @@ Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It
 - Optional automatic recognition of friends, guild members, and group members.
 - Optional recognition of TRP3 relationships and display of RP names.
 - Pet and minion names that follow whether their owner is known.
-- Adjustable name size and position.
+- Separate size, height, and colour controls for met and unmet names, with reset buttons.
+- Optional smaller grey names for people you have not met yet.
+- A reversible Meet/Forget command suitable for a single keybind.
 - Restoration of the original managed game settings when disabled normally outside combat.
 
 ## Installation
@@ -39,6 +41,7 @@ On macOS, running `python3 install.py` also detects the standard installation lo
 2. Target a player and right-click their portrait. Choose **Meet** in the **Acquainted** section, or type `/acq meet`.
 3. Use **Forget** or `/acq forget` to remove their saved acquaintance.
 4. Use `/acq meet The Herbalist` to give your target a personal nickname.
+5. Bind `/acq togglemet` instead of `/acq meet` if you want the same key to undo an accidental Meet.
 
 Forgetting someone removes only the manual record. Enabled friend, guild, group, or TRP3 rules can still reveal them.
 
@@ -55,8 +58,17 @@ Forgetting someone removes only the manual record. Enabled friend, guild, group,
 | Also filter enemy players | Off | Apply the same rules to exposed enemy player/companion plates |
 | Show guild beneath known names | On | Display the actual game guild in angle brackets |
 | Show pet/minion names for known people | On | Display companions only when their owner is known |
-| Name size | 22 | Adjust between 12 and 40 |
-| Height above head | 16 | Adjust between 0 and 40 |
+| Met name size | 22 | Adjust between 8 and 48 |
+| Met name height | 16 | Adjust between -200 and 100; negative values move the name down |
+| Met name colour | Gold | Choose with the colour picker; applies to the guild line too |
+| Show names of people you have not met | Off | Display unmet player names in their own style |
+| Unmet name size | 14 | Adjust between 8 and 48 |
+| Unmet name height | 16 | Adjust independently between -200 and 100 |
+| Unmet name colour | Grey | Choose independently with the colour picker |
+
+The **Met people** and **Unmet people** sections each have a style reset button. **Reset name display** restores both styles and the default of hiding unmet names. These buttons preserve your acquaintances, nicknames, and friend/guild/group/TRP3 recognition rules. Existing met-name size and height preferences are preserved when upgrading.
+
+Met styling applies to anyone recognised by an enabled visibility rule, including friends or TRP3 relationships. If unmet names are enabled, they show only the player name; their guild and companion names remain hidden. The chosen colours apply to RP names as well. Colour-picker changes preview live, and Cancel restores the previous colour.
 
 Your own character counts as a known companion owner. Switching companion names off hides the names of all managed companions, including your own. No owner guild line is displayed on pets.
 
@@ -69,11 +81,20 @@ Both `/acq` and `/acquainted` accept these commands:
 | `/acq` | Open settings |
 | `/acq meet [nickname]` | Remember your target |
 | `/acq forget` | Forget your target |
+| `/acq togglemet` | Toggle your target's saved Meet/Forget state |
 | `/acq on`, `/acq off`, `/acq toggle` | Control filtering |
 | `/acq restore` | Disable and restore original settings |
 | `/acq status` | Show version, filtering status, and any compatibility error |
 | `/acq setup` | Reapply the temporary name settings once |
 | `/acq help` | Show command help |
+
+For a reversible Meet/Forget keybind, create a macro containing:
+
+```text
+/acq togglemet
+```
+
+This toggles the manual acquaintance record; automatic recognition rules can still keep someone in the met display style. Repeating the toggle during the same session restores their previous nickname too. `/acq toggle` continues to enable or disable the addon itself.
 
 ## Settings restoration and limitations
 

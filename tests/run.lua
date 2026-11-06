@@ -57,6 +57,13 @@ local function world(saved)
         local f = { kind = kind, name = name, parent = parent, template = template, scripts = {}, alpha = 0.8, shown = true }
         function f:RegisterEvent(event) self.events = self.events or {}; self.events[event] = true; w.events = self end
         function f:SetScript(event, callback) self.scripts[event] = callback end
+        function f:HookScript(event, callback)
+            local previous = self.scripts[event]
+            self.scripts[event] = function(...)
+                if previous then previous(...) end
+                callback(...)
+            end
+        end
         function f:SetPoint(...) self.point = { ... } end
         function f:ClearAllPoints() self.point = nil end
         function f:SetWidth(v) self.width = v end
@@ -69,8 +76,13 @@ local function world(saved)
         function f:SetAlpha(v) assert(not self.forbidden, 'forbidden setter'); self.alpha = v end
         function f:GetAlpha() return self.alpha end
         function f:IsForbidden() return self.forbidden end
-        function f:Hide() self.shown = false end
+        function f:Hide()
+            local wasShown = self.shown
+            self.shown = false
+            if wasShown and self.scripts.OnHide then self.scripts.OnHide(self) end
+        end
         function f:Show() self.shown = true end
+        function f:IsShown() return self.shown end
         function f:SetShown(v) self.shown = v end
         function f:SetChecked(v) self.checked = v end
         function f:GetChecked() return self.checked end
@@ -96,6 +108,14 @@ local function world(saved)
         return f
     end
     env.CreateFrame = widget
+    env.ColorPickerFrame = widget('ColorPicker')
+    env.ColorPickerFrame.shown = false
+    function env.ColorPickerFrame:SetupColorPickerAndShow(options)
+        self.options = options
+        self.selected = { options.r, options.g, options.b }
+        self:Show()
+    end
+    function env.ColorPickerFrame:GetColorRGB() return (table.unpack or unpack)(self.selected) end
     env.Settings = {
         RegisterCanvasLayoutCategory = function(frame, title)
             w.category = { frame = frame, title = title, GetID = function() return 71 end }
@@ -187,7 +207,8 @@ local function world(saved)
     env.C_AddOns = { DisableAddOn = function() end, EnableAddOn = function() end, DisableAllAddOns = function() end,
         EnableAllAddOns = function() end, GetAddOnName = function(index) return index == 7 and 'Acquainted' or 'other' end }
     env.hooksecurefunc = function(object, method, callback)
-        assert(object == env.C_AddOns, 'must not hook native frame setters')
+        assert(object == env.C_AddOns or (object == env.ColorPickerFrame and method == 'SetupColorPickerAndShow'),
+            'must not hook native frame setters')
         w.hooks[#w.hooks + 1] = method
         local original = object[method]
         object[method] = function(...) original(...); callback(...) end
@@ -536,5 +557,133 @@ for _, plate in ipairs({ petPlate, minionPlate, battlePlate, ownPet, orphan }) d
     check(plate.UnitFrame.alpha == 0.8 and not pets:label(plate).shown, 'disable releases companion frame and removes text')
 end
 check(#pets:menu('PLAYER', 'petA').entries == 0, 'companion cannot be manually met instead of its owner')
+local display = world({
+    options = { fontSize = 27, nameOffset = 0, showGuild = false },
+    known = { ['Player-1-B'] = { name = 'Briar Stone', nickname = 'The Scholar' } },
+})
+local strangerDisplay, metDisplay = display:plate('stranger'), display:plate('acquaintance')
+display:load(); display:flush()
+check(display.ns.db.options.fontSize == 27 and display.ns.db.options.nameOffset == 0, 'upgrade preserves existing met size and zero height')
+check(not display.ns.db.options.showUnmetNames and not display:label(strangerDisplay).shown, 'unmet names remain hidden by default after upgrade')
+check(display.ns.db.options.unmetFontSize == 14 and display.ns.db.options.unmetColour == '999999', 'unmet style defaults to smaller grey text')
+local nativeWrites = display.writes
+display:option('nameOffset', -90)
+display:option('metColour', '#00ff80')
+check(display:label(metDisplay).point[5] == -90, 'met name can move below old zero limit')
+check(display.ns.db.options.metColour == '00FF80' and display:label(metDisplay).color[2] == 1, 'met colour validates and renders')
+check(display.env.Acquainted_nameOffsetSlider.low == -200 and display.env.Acquainted_nameOffsetSlider.high == 100, 'settings slider exposes negative height range')
+display.env.Acquainted_nameOffsetSlider.scripts.OnValueChanged(display.env.Acquainted_nameOffsetSlider, -90)
+display:flush()
+check(display:label(metDisplay).point[5] == -90, 'actual height slider accepts negative positions')
+display:option('showUnmetNames', true)
+check(display:label(strangerDisplay).shown and display:label(strangerDisplay).font[2] == 14, 'optional unmet name is visible in smaller text')
+check(display:label(strangerDisplay).text == 'Aster Moon', 'unmet style displays the player name')
+check(math.abs(display:label(strangerDisplay).color[1] - 0.6) < 0.001, 'unmet default text is grey')
+check(not strangerDisplay.labels[2].shown, 'unmet display does not reveal guild')
+display:option('unmetNameOffset', -120)
+display:option('unmetFontSize', 10)
+display:option('unmetColour', '6688AA')
+check(display:label(strangerDisplay).point[5] == -120 and display:label(strangerDisplay).font[2] == 10, 'unmet height and size are independently adjustable')
+check(display:label(metDisplay).point[5] == -90 and display:label(metDisplay).font[2] == 27, 'unmet controls leave met layout unchanged')
+check(display.ns.SetOption('metColour', 'not-a-colour') == false, 'invalid colour input rejected')
+check(display.ns.SetOption('fontSize', 0/0) == false, 'nonfinite size rejected')
+display:option('nameOffset', -1000)
+display:option('unmetNameOffset', 1000)
+check(display.ns.db.options.nameOffset == -200 and display.ns.db.options.unmetNameOffset == 100, 'height controls enforce expanded bounds')
+display:option('fontSize', 1000)
+display:option('unmetFontSize', -1000)
+check(display.ns.db.options.fontSize == 48 and display.ns.db.options.unmetFontSize == 8, 'font controls enforce supported bounds')
+
+display:command('togglemet')
+check(display.ns.db.known['Player-1-A'] and display:label(strangerDisplay).font[2] == 48, 'togglemet meets current target and switches to met style')
+check(strangerDisplay.labels[2].shown, 'meeting restores guild line')
+display:command('togglemet')
+check(not display.ns.db.known['Player-1-A'] and display:label(strangerDisplay).font[2] == 8, 'same togglemet command undoes accidental Meet')
+check(not strangerDisplay.labels[2].shown, 'undo switches back to unmet display without guild')
+display:option('showUnmetNames', false)
+display:command('togglemet'); display:command('togglemet')
+check(not display:label(strangerDisplay).shown, 'togglemet also undoes Meet when unmet names are hidden')
+display.target = 'npc'; display:command('togglemet')
+check(not display.ns.db.known['Creature-1-C'], 'togglemet cannot remember an NPC')
+display.target = 'acquaintance'; display:command('togglemet')
+check(not display.ns.db.known['Player-1-B'], 'togglemet removes an existing manual acquaintance')
+display:command('togglemet')
+check(display.ns.db.known['Player-1-B'].nickname == 'The Scholar', 'toggling back restores the previous nickname during this session')
+display:command('meet The Scholar')
+
+local function click(worldState, button)
+    button.scripts.OnClick(button)
+    worldState:flush()
+end
+local function namedButton(text)
+    for _, frame in ipairs(display.frames) do
+        if frame.template == 'UIPanelButtonTemplate' and frame.text == text then return frame end
+    end
+    error('missing button: ' .. text)
+end
+click(display, display.env.Acquainted_metColourButton)
+local picker = display.env.ColorPickerFrame
+check(picker.shown and picker.options.hasOpacity == false, 'met colour button opens native RGB picker')
+local priorColour = display.ns.db.options.metColour
+picker.selected = { 0.2, 0.4, 0.6 }; picker.options.swatchFunc(); display:flush()
+check(display.ns.db.options.metColour == '336699', 'picker previews met colour live')
+picker:Hide(); picker.options.cancelFunc(); display:flush()
+check(display.ns.db.options.metColour == priorColour, 'cancel restores colour from before opening picker')
+click(display, display.env.Acquainted_unmetColourButton)
+picker.selected = { 0.5, 0.25, 0 }; picker.options.swatchFunc(); display:flush()
+check(display.ns.db.options.unmetColour == '804000', 'unmet colour picker controls independent style')
+picker:Hide(); display:flush()
+check(display.ns.db.options.unmetColour == '804000', 'accept keeps selected colour')
+-- A later picker opened by another addon must not be closed by our resets.
+picker:Show()
+click(display, namedButton('Reset met style'))
+check(picker.shown, 'reset does not close another addon colour picker after our session ended')
+picker:Hide()
+click(display, display.env.Acquainted_metColourButton)
+local previousSwatch = picker.options.swatchFunc
+picker:SetupColorPickerAndShow({ r = 0, g = 0, b = 0, swatchFunc = function() end })
+click(display, namedButton('Reset met style'))
+previousSwatch(); display:flush()
+check(picker.shown and display.ns.db.options.metColour == 'FFD100', 'another addon taking over an open picker retires our callbacks without closing theirs')
+picker:Hide(); display:flush()
+check(display.ns.db.options.fontSize == 22 and display.ns.db.options.nameOffset == 16 and display.ns.db.options.metColour == 'FFD100', 'met reset restores met defaults')
+check(display.ns.db.options.unmetColour == '804000', 'met reset preserves unmet style')
+display:option('showUnmetNames', true)
+click(display, namedButton('Reset unmet style'))
+check(display.ns.db.options.unmetFontSize == 14 and display.ns.db.options.unmetNameOffset == 16 and display.ns.db.options.unmetColour == '999999', 'unmet reset restores unmet defaults')
+check(display.ns.db.options.showUnmetNames, 'style-only reset preserves unmet visibility choice')
+click(display, display.env.Acquainted_metColourButton)
+local staleCancel = picker.options.cancelFunc
+picker.selected = { 1, 0, 0 }; picker.options.swatchFunc(); display:flush()
+click(display, namedButton('Reset met style'))
+staleCancel(); display:flush()
+check(not picker.shown and display.ns.db.options.metColour == 'FFD100', 'reset closes own picker and stale cancel cannot undo defaults')
+display:option('fontSize', 30)
+display:option('unmetColour', '123456')
+display:option('showGuild', true)
+click(display, namedButton('Reset name display'))
+check(not display.ns.db.options.showUnmetNames and display.ns.db.options.fontSize == 22 and display.ns.db.options.unmetColour == '999999', 'full display reset restores both styles and hidden-unmet default')
+check(display.ns.db.known['Player-1-B'].nickname == 'The Scholar' and display.ns.db.options.showGuild, 'display resets preserve acquaintances, nicknames, and recognition rules')
+check(display.writes == nativeWrites, 'all appearance edits, pickers, resets, and togglemet avoid game-setting writes')
+
+display.env.AddOn_TotalRP3 = { Player = { CreateFromUnit = function()
+    return { GetRoleplayingName = function() return '|cffff0000Briar|r |cnNORMAL_FONT_COLOR:Stone|r' end }
+end } }
+display:command('meet') -- clear the manual nickname so the RP name is displayed
+display:option('metColour', '00FF00')
+check(display:label(metDisplay).text == 'Briar Stone' and display:label(metDisplay).color[2] == 1, 'configured colour overrides embedded RP colour codes')
+display:option('showGuild', false)
+display:option('showUnmetNames', true)
+display.units.stranger.guildName = 'Wayfarers'
+display.units.demoPet = { guid = 'Pet-1-Demo', first = 'Shadow', pet = true, friend = true, owner = 'Player-1-A' }
+local demoPet = display:plate('demoPet'); display:tick()
+check(display:label(strangerDisplay).shown and not display:label(demoPet).shown, 'visible unmet player name does not reveal their pet name')
+display:command('off')
+check(not display:label(strangerDisplay).shown and not display:label(metDisplay).shown, 'disable clears met and unmet labels')
+display:restored('expanded display options retain exact game-setting restoration')
+local invalidOptions = world({ options = { fontSize = 'bad', nameOffset = -500, metColour = 'broken', unmetColour = '#aabbcc' } })
+invalidOptions:load(); invalidOptions:flush()
+check(invalidOptions.ns.db.options.fontSize == 22 and invalidOptions.ns.db.options.nameOffset == -200, 'startup sanitizes malformed and out-of-range numeric display options')
+check(invalidOptions.ns.db.options.metColour == 'FFD100' and invalidOptions.ns.db.options.unmetColour == 'AABBCC', 'startup validates and normalizes persisted colours')
 print('Acquainted: ' .. checks .. ' checks passed')
 return {}
