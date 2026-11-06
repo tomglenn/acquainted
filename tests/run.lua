@@ -69,7 +69,26 @@ local function world(saved)
         function f:SetWidth(v) self.width = v end
         function f:SetHeight(v) self.height = v end
         function f:SetSize(x, y) self.width, self.height = x, y end
-        function f:SetText(v) self.text = v end
+        function f:SetText(v)
+            local changed = self.text ~= v
+            self.text = v
+            if changed and self.scripts.OnTextChanged then self.scripts.OnTextChanged(self, false) end
+        end
+        function f:GetText() return self.text or '' end
+        function f:SetAutoFocus(v) self.autoFocus = v end
+        function f:SetMaxLetters(v) self.maxLetters = v end
+        function f:SetEnabled(v) self.enabled = v end
+        function f:HasFocus() return self.focused or false end
+        function f:SetFocus() self.focused = true end
+        function f:ClearFocus()
+            local focused = self.focused
+            self.focused = false
+            if focused and self.scripts.OnEditFocusLost then self.scripts.OnEditFocusLost(self) end
+        end
+        function f:SetAllPoints() end
+        function f:SetClipsChildren(v) self.clipsChildren = v end
+        function f:SetColorTexture(...) self.color = { ... } end
+        function f:CreateTexture() return widget('Texture', nil, self) end
         function f:SetJustifyH(v) self.justify = v end
         function f:SetFont(path, size, flags) self.font = { path, size, flags }; return true end
         function f:SetTextColor(...) self.color = { ... } end
@@ -94,6 +113,7 @@ local function world(saved)
             if self.scripts.OnValueChanged then self.scripts.OnValueChanged(self, v) end
         end
         function f:SetScrollChild(child) self.child = child end
+        function f:SetVerticalScroll(value) self.scrollOffset = value end
         function f:CreateFontString(_, layer, font)
             local text = widget('FontString', nil, self)
             text.layer, text.fontObject = layer, font
@@ -624,6 +644,8 @@ local function click(worldState, button)
     worldState:flush()
 end
 local function namedButton(text)
+    local names = { ['Reset met style'] = 'Acquainted_ResetMet', ['Reset unmet style'] = 'Acquainted_ResetUnmet', ['Reset name display'] = 'Acquainted_ResetAll' }
+    if names[text] then return display.env[names[text]] end
     for _, frame in ipairs(display.frames) do
         if frame.template == 'UIPanelButtonTemplate' and frame.text == text then return frame end
     end
@@ -754,12 +776,7 @@ check(defaults.ns.db.options.showUnmetNames and defaults:label(defaultUnmet).sho
 check(defaults:label(defaultUnmet).font[2] == 14 and defaults:label(defaultUnmet).point[5] == -40, 'default unmet name uses size 14 and height -40')
 check(defaults.ns.db.options.metColour == 'FFD100' and defaults.ns.db.options.unmetColour == '999999', 'default colours remain gold and grey')
 check(not defaults.ns.db.options.showUnmetGuildName and not defaultUnmet.labels[2].shown, 'unmet guild is hidden by default')
-local unmetGuildCheckbox
-for _, frame in ipairs(defaults.frames) do
-    if frame.template == 'UICheckButtonTemplate' and frame.labels[1].text == 'Show guild names for unmet people' then
-        unmetGuildCheckbox = frame
-    end
-end
+local unmetGuildCheckbox = defaults.env.Acquainted_showUnmetGuildNameCheck
 check(unmetGuildCheckbox ~= nil, 'unmet guild setting is available in the actual settings panel')
 unmetGuildCheckbox:SetChecked(true); unmetGuildCheckbox.scripts.OnClick(unmetGuildCheckbox); defaults:flush()
 check(defaultUnmet.labels[2].shown and defaultUnmet.labels[2].text == '<Wayfarers>', 'unmet guild checkbox reveals the real guild')
@@ -781,5 +798,116 @@ defaults.ns.ResetAppearance('unmet'); defaults:flush()
 check(defaults.ns.db.options.showUnmetGuildName, 'style-only reset preserves unmet guild visibility')
 defaults.ns.ResetAppearance('all'); defaults:flush()
 check(not defaults.ns.db.options.showUnmetGuildName and not defaultUnmet.labels[2].shown, 'full display reset restores hidden unmet guild default')
+-- Drive the tabbed settings through its real widget callbacks.
+local ui = world({
+    options = { showFriends = true, fontSize = 25, nameOffset = -70, showUnmetNames = false },
+    known = { ['Player-1-B'] = { name = 'Briar Stone', nickname = 'The Scholar' } },
+})
+ui:load(); ui:flush()
+local e = ui.env
+check(e.Acquainted_AppearancePage.shown and not e.Acquainted_RecognitionPage.shown and not e.Acquainted_AcquaintancesPage.shown, 'appearance is the only initial settings page')
+local uiWrites = ui.writes
+local metPreview, unmetPreview
+for _, frame in ipairs(ui.frames) do
+    if frame.kind == 'FontString' and frame.text == 'Alex Rowan' then
+        if frame.font[2] == 25 then metPreview = frame else unmetPreview = frame end
+    end
+end
+check(metPreview and unmetPreview and metPreview.shown and not unmetPreview.shown, 'live previews reflect saved styles and unmet visibility')
+local number = e.Acquainted_nameOffsetValue
+number:SetFocus(); number:SetText('-83'); number.scripts.OnEnterPressed(number); ui:flush()
+check(ui.ns.db.options.nameOffset == -83 and not number:HasFocus(), 'exact negative height can be typed and applied with Enter')
+check(metPreview.point[5] == 62 - 83 / 4, 'preview immediately follows typed height')
+number:SetFocus(); number:SetText('-64'); number:ClearFocus(); ui:flush()
+check(ui.ns.db.options.nameOffset == -64, 'clicking away applies a numeric edit')
+number:SetFocus(); number:SetText('oops'); number.scripts.OnEnterPressed(number)
+check(number:GetText() == '-64' and ui.ns.db.options.nameOffset == -64, 'invalid numeric edit restores the saved value')
+number:SetFocus(); number:SetText('-30'); number.scripts.OnEscapePressed(number)
+check(number:GetText() == '-64' and ui.ns.db.options.nameOffset == -64, 'Escape cancels a numeric edit')
+number:SetFocus(); number:SetText('-99')
+click(ui, e.Acquainted_ResetMet)
+check(ui.ns.db.options.nameOffset == -40 and number:GetText() == '-40', 'reset overrides uncommitted numeric edits without a later undo')
+e.Acquainted_showUnmetNamesCheck:SetChecked(true)
+click(ui, e.Acquainted_showUnmetNamesCheck)
+check(unmetPreview.shown, 'unmet name toggle updates preview')
+e.Acquainted_unmetFontSizeSlider.scripts.OnValueChanged(e.Acquainted_unmetFontSizeSlider, 18)
+check(unmetPreview.font[2] == 18, 'dragging slider updates preview immediately')
+click(ui, e.Acquainted_unmetColourButton)
+e.ColorPickerFrame.selected = { 0, 1, 0 }; e.ColorPickerFrame.options.swatchFunc()
+check(unmetPreview.color[2] == 1 and unmetPreview.color[1] == 0, 'colour swatch live changes update preview')
+click(ui, e.Acquainted_RecognitionTab)
+check(not e.ColorPickerFrame.shown and e.Acquainted_RecognitionPage.shown and not e.Acquainted_AppearancePage.shown, 'tab switch closes our picker and changes the visible page')
+check(e.Acquainted_showFriendsCheck.checked and ui.ns.db.options.showFriends, 'redesigned recognition controls preserve saved preferences')
+local advanced = e.Acquainted_affectEnemiesCheck.parent
+check(not advanced.shown, 'advanced enemy options start collapsed')
+click(ui, e.Acquainted_AdvancedButton)
+check(advanced.shown, 'advanced disclosure reveals enemy options')
+click(ui, e.Acquainted_AdvancedButton)
+check(not advanced.shown, 'advanced disclosure can be collapsed')
+click(ui, e.Acquainted_AcquaintancesTab)
+check(e.Acquainted_TargetButton.enabled and e.Acquainted_TargetButton.text == 'Meet', 'unmet current target offers Meet')
+click(ui, e.Acquainted_TargetButton)
+check(ui.ns.db.known['Player-1-A'] and e.Acquainted_TargetButton.text == 'Forget', 'current target Meet button saves target and becomes Forget')
+ui.target = 'npc'; ui:fire('PLAYER_TARGET_CHANGED')
+check(not e.Acquainted_TargetButton.enabled, 'non-player target disables the Meet action immediately')
+ui.target = 'acquaintance'; ui:fire('PLAYER_TARGET_CHANGED')
+check(e.Acquainted_TargetButton.enabled and e.Acquainted_TargetButton.text == 'Forget', 'target changes update the action immediately')
+local function visibleRows()
+    local result = {}
+    for _, frame in ipairs(ui.frames) do
+        if frame.parent == e.Acquainted_AcquaintanceList and frame.kind == 'Frame' and frame.shown then result[#result + 1] = frame end
+    end
+    return result
+end
+local function rowButton(row, text)
+    for _, frame in ipairs(ui.frames) do
+        if frame.parent == row and frame.text == text then return frame end
+    end
+    error('missing row button: ' .. text)
+end
+e.Acquainted_Search:SetText('sChOlAr')
+local matches = visibleRows()
+check(#matches == 1 and matches[1].guid == 'Player-1-B', 'search finds nicknames without case sensitivity')
+local briarRow = matches[1]
+click(ui, rowButton(briarRow, 'Edit nickname'))
+check(e.Acquainted_NicknameEditor.shown and e.Acquainted_NicknameInput:GetText() == 'The Scholar', 'nickname editor opens with the saved nickname')
+e.Acquainted_NicknameInput:SetText('  The Ranger  ')
+click(ui, e.Acquainted_SaveNickname)
+check(ui.ns.db.known['Player-1-B'].nickname == 'The Ranger' and not e.Acquainted_NicknameEditor.shown, 'nickname edit saves trimmed text for the chosen GUID')
+check(#visibleRows() == 0, 'active search updates when nickname no longer matches')
+e.Acquainted_Search:SetText('ranger')
+matches = visibleRows()
+check(#matches == 1 and matches[1].guid == 'Player-1-B', 'new nickname is searchable')
+click(ui, rowButton(matches[1], 'Edit nickname'))
+e.Acquainted_NicknameInput:SetText('discard me')
+e.Acquainted_NicknameInput.scripts.OnEscapePressed(e.Acquainted_NicknameInput)
+check(ui.ns.db.known['Player-1-B'].nickname == 'The Ranger', 'Escape cancels nickname changes')
+click(ui, rowButton(matches[1], 'Edit nickname'))
+e.Acquainted_NicknameInput:SetText('')
+e.Acquainted_NicknameInput.scripts.OnEnterPressed(e.Acquainted_NicknameInput)
+check(ui.ns.db.known['Player-1-B'].nickname == nil, 'empty nickname falls back to roleplay or game name')
+e.Acquainted_Search:SetText('Briar')
+matches = visibleRows()
+click(ui, rowButton(matches[1], 'Edit nickname'))
+local saveStale = e.Acquainted_SaveNickname.scripts.OnClick
+click(ui, rowButton(matches[1], 'Forget'))
+check(not ui.ns.db.known['Player-1-B'] and not e.Acquainted_NicknameEditor.shown, 'forget clears saved entry and closes its nickname editor')
+e.Acquainted_NicknameInput:SetText('stale'); saveStale()
+check(not ui.ns.db.known['Player-1-B'], 'stale nickname save cannot recreate a forgotten player')
+e.Acquainted_Search:SetText('[')
+check(#visibleRows() == 0, 'search treats pattern characters as literal text')
+e.Acquainted_Search:SetText('')
+check(#visibleRows() == 1, 'clearing search returns remaining saved acquaintances')
+e.Acquainted_Search:SetFocus(); click(ui, e.Acquainted_HelpTab)
+check(e.Acquainted_HelpPage.shown and not e.Acquainted_Search:HasFocus(), 'Help is separate and tab switches release search focus')
+check(ui.writes == uiWrites, 'all settings navigation, previews, search and nickname changes avoid game-setting writes')
+ui:command('off')
+local restoredStatus
+for _, frame in ipairs(ui.frames) do
+    if frame.kind == 'FontString' and frame.text == 'Off · original name settings restored.' then restoredStatus = frame end
+end
+check(restoredStatus ~= nil, 'disabled status updates after settings have actually restored')
+ui:restored('tabbed settings preserve exact restoration')
+
 print('Acquainted: ' .. checks .. ' checks passed')
 return {}

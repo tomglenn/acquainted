@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Redesign settings into Appearance, Recognition, and Acquaintances tabs, with a separate Help page.
+- Add side-by-side live previews for met and unmet name styles.
+- Add exact-value text boxes for size and vertical position, with Lower/Higher slider labels and compact colour swatches.
+- Group recognition rules together and move enemy filtering into a collapsible Advanced section.
+- Add a searchable acquaintance list, nickname editing, and a current-target Meet/Forget button.
+- Keep the enable switch visible across tabs and preserve existing acquaintances and preferences.
+
 ## 0.3.3
 
 - Add “Show guild names for unmet people”, off by default, in the Unmet people settings.

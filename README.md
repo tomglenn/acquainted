@@ -12,7 +12,8 @@ Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It
 - Optional automatic recognition of friends, guild members, and group members.
 - Optional recognition of TRP3 relationships and display of RP names.
 - Pet and minion names that follow whether their owner is known.
-- Separate size, height, and colour controls for met and unmet names, with reset buttons.
+- Tabbed settings with live previews, exact size/height values, colour swatches, and reset buttons.
+- Searchable acquaintances with nickname editing and a current-target Meet/Forget button.
 - Smaller grey names for people you have not met yet, with an option to hide them.
 - A reversible Meet/Forget command suitable for a single keybind.
 - Restoration of the original managed game settings when disabled normally outside combat.
@@ -38,7 +39,7 @@ On macOS, running `python3 install.py` also detects the standard installation lo
 ## Getting started
 
 1. Type `/acq` to open settings.
-2. Target a player and right-click their portrait. Choose **Meet** in the **Acquainted** section, or type `/acq meet`.
+2. Target a player and choose **Meet** on the **Acquaintances** tab. You can also right-click their portrait and choose **Meet** in the **Acquainted** section, or type `/acq meet`.
 3. Use **Forget** or `/acq forget` to remove their saved acquaintance.
 4. Use `/acq meet The Herbalist` to give your target a personal nickname.
 5. Bind `/acq togglemet` instead of `/acq meet` if you want the same key to undo an accidental Meet.
@@ -46,6 +47,13 @@ On macOS, running `python3 install.py` also detects the standard installation lo
 Forgetting someone removes only the manual record. Enabled friend, guild, group, or TRP3 rules can still reveal them.
 
 ## Settings
+
+- **Appearance:** compare met and unmet styles side by side with live previews. Drag the size and position sliders, or type exact values and press Enter. Lower/Higher labels show the direction. Click a colour swatch to open the colour picker. Each card has its own guild toggle and appearance reset; pet names and the full appearance reset are below the cards. Preview position is shown at quarter scale; in-game height uses the value entered.
+- **Recognition:** choose who automatically counts as met. The roleplay-name preference is separate; enemy filtering is under **Advanced**.
+- **Acquaintances:** Meet or Forget the displayed target, search saved names and nicknames, or choose **Edit nickname**. Save a blank nickname to use their roleplay or game name again. The target display also indicates automatic recognition.
+- **Help:** commands, keybind guidance, and explanations of name visibility.
+
+The enable switch remains available on every tab. Changes apply immediately; typing Escape cancels a number or nickname edit. Numeric changes also apply when you click away. Switching off restores the original managed game settings.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -67,9 +75,9 @@ Forgetting someone removes only the manual record. Enabled friend, guild, group,
 | Unmet name height | -40 | Adjust independently between -200 and 100 |
 | Unmet name colour | Grey | Choose independently with the colour picker |
 
-The **Met people** and **Unmet people** sections each have a style reset button. **Reset name display** restores both styles and the defaults of showing unmet names and hiding their guilds. These buttons preserve your acquaintances, nicknames, and friend/guild/group/TRP3 recognition rules. Existing met-name size and height preferences are preserved when upgrading.
+The **Met people** and **Unmet people** cards each have a **Reset appearance** button. **Reset all appearance** restores both styles and the defaults of showing unmet names and hiding their guilds. These buttons preserve your acquaintances, nicknames, and friend/guild/group/TRP3 recognition rules. Existing met-name size and height preferences are preserved when upgrading.
 
-Met styling applies to anyone recognised by an enabled visibility rule, including friends or TRP3 relationships. If unmet names are enabled, their guild can also be shown with **Show guild names for unmet people**. This is independent of the setting for known players and uses the unmet name style. Unmet companion names remain hidden. The chosen colours apply to RP names as well. Colour-picker changes preview live, and Cancel restores the previous colour.
+Met styling applies to anyone recognised by an enabled visibility rule, including friends or TRP3 relationships. If unmet names are enabled, their guild can also be shown with **Show guild** on the **Unmet people** card. This is independent of the setting for known players and uses the unmet name style. Unmet companion names remain hidden. The chosen colours apply to RP names as well. Colour-picker changes preview live, and Cancel restores the previous colour.
 
 Your own character counts as a known companion owner. Switching companion names off hides the names of all managed companions, including your own. No owner guild line is displayed on pets.
 

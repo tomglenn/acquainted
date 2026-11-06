@@ -4,7 +4,7 @@ local states = setmetatable({}, { __mode = "k" })
 local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
 local toggledAcquaintances = {}
-ns.version = "0.3.3"
+ns.version = "0.4.0"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then
@@ -103,6 +103,7 @@ local function RenderAll()
 end
 local function Service()
     if not db or stopping or servicing then return end
+    local wasActive, hadRestore = active, next(db.restore) ~= nil
     servicing = true
     local ok, err = pcall(function()
         local enabled = db.options.enabled and not suspended and not failed
@@ -129,6 +130,7 @@ local function Service()
         ns.GameSettings.Restore(db)
     end
     servicing = false
+    if ns.RefreshSettings and (wasActive ~= active or hadRestore ~= (next(db.restore) ~= nil)) then ns.RefreshSettings() end
 end
 function ns.Queue()
     if not db or queued or stopping or servicing then return end
@@ -156,6 +158,7 @@ function ns.ResetAppearance(which)
     elseif which == "all" then
         keys = { "fontSize", "nameOffset", "metColour", "unmetFontSize", "unmetNameOffset", "unmetColour", "showUnmetNames", "showUnmetGuildName" }
     else return false end
+    if ns.FinishSettingsInput then ns.FinishSettingsInput() end
     if ns.CloseColourPicker then ns.CloseColourPicker() end
     for _, key in ipairs(keys) do db.options[key] = ns.defaults[key] end
     ns.Queue()
@@ -203,6 +206,16 @@ function ns.Forget(guid)
     db.known[guid] = nil
     ns.Queue()
     if ns.RefreshSettings then ns.RefreshSettings() end
+end
+function ns.SetNickname(guid, nickname)
+    local record = db.known[guid]
+    if not record or type(nickname) ~= "string" then return false end
+    nickname = nickname:match("^%s*(.-)%s*$")
+    record.nickname = nickname ~= "" and nickname or nil
+    toggledAcquaintances[guid] = nil
+    ns.Queue()
+    if ns.RefreshSettings then ns.RefreshSettings() end
+    return true
 end
 local function Status()
     ns.Say(ns.version .. " | " .. (active and "enabled" or "disabled") .. " | TRP3 optional")
@@ -295,6 +308,7 @@ events:SetScript("OnEvent", function(_, event, unit)
             end
         end
         ns.Queue()
+        if (event == "PLAYER_TARGET_CHANGED" or event == "UNIT_NAME_UPDATE") and ns.RefreshSettings then ns.RefreshSettings() end
     end
 end)
 for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_LOGOUT", "ADDONS_UNLOADING", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
