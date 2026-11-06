@@ -175,17 +175,12 @@ local function AppearanceCard(parent, known, x)
     preview:SetSize(272, 120)
     preview:SetClipsChildren(true)
     Background(preview, 0.025, 0.035, 0.045, 0.95)
-    local floor = preview:CreateTexture(nil, "ARTWORK")
-    floor:SetPoint("BOTTOMLEFT", 12, 12)
-    floor:SetSize(248, 1)
-    floor:SetColorTexture(0.5, 0.5, 0.5, 0.35)
     local name = preview:CreateFontString(nil, "OVERLAY")
     local guild = preview:CreateFontString(nil, "OVERLAY")
     local hidden = Text(preview, "Names hidden", "GameFontDisable", 20, -48, 232)
     hidden:SetJustifyH("CENTER")
     previews[known and "met" or "unmet"] = { frame = preview, name = name, guild = guild, hidden = hidden }
     if known then
-        Text(card, "Names shown for people you know", "GameFontDisableSmall", 16, -174, 266)
         Checkbox(card, "showGuildName", "Show guild", 10, -198, 248)
     else
         Checkbox(card, "showUnmetNames", "Show name", 10, -166, 248)
