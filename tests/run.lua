@@ -753,5 +753,33 @@ check(defaults.ns.db.options.nameOffset == -40 and defaults.ns.db.options.unmetN
 check(defaults.ns.db.options.showUnmetNames and defaults:label(defaultUnmet).shown, 'new installations show unmet names by default')
 check(defaults:label(defaultUnmet).font[2] == 14 and defaults:label(defaultUnmet).point[5] == -40, 'default unmet name uses size 14 and height -40')
 check(defaults.ns.db.options.metColour == 'FFD100' and defaults.ns.db.options.unmetColour == '999999', 'default colours remain gold and grey')
+check(not defaults.ns.db.options.showUnmetGuildName and not defaultUnmet.labels[2].shown, 'unmet guild is hidden by default')
+local unmetGuildCheckbox
+for _, frame in ipairs(defaults.frames) do
+    if frame.template == 'UICheckButtonTemplate' and frame.labels[1].text == 'Show guild names for unmet people' then
+        unmetGuildCheckbox = frame
+    end
+end
+check(unmetGuildCheckbox ~= nil, 'unmet guild setting is available in the actual settings panel')
+unmetGuildCheckbox:SetChecked(true); unmetGuildCheckbox.scripts.OnClick(unmetGuildCheckbox); defaults:flush()
+check(defaultUnmet.labels[2].shown and defaultUnmet.labels[2].text == '<Wayfarers>', 'unmet guild checkbox reveals the real guild')
+check(defaultUnmet.labels[2].font[2] == 11 and defaultUnmet.labels[2].color[1] == 0.6, 'unmet guild uses a smaller font and unmet colour')
+check(defaults.ns.db.known['Player-1-A'] == nil, 'showing an unmet guild does not meet the player')
+defaults:option('showGuildName', false)
+check(defaultUnmet.labels[2].shown, 'known guild setting does not control unmet guilds')
+defaults:command('meet')
+check(not defaultUnmet.labels[2].shown, 'enabled unmet guild setting cannot reveal a disabled met guild')
+defaults:command('forget')
+check(defaultUnmet.labels[2].shown, 'forget returns to the configured unmet guild display')
+defaults:option('showUnmetNames', false)
+check(not defaultUnmet.labels[2].shown, 'unmet guild cannot appear when unmet names are hidden')
+defaults:option('showUnmetNames', true)
+defaults.units.stranger.guildName = nil; defaults:tick()
+check(not defaultUnmet.labels[2].shown, 'unmet players without a guild have no guild line')
+defaults.units.stranger.guildName = 'Wayfarers'; defaults:tick()
+defaults.ns.ResetAppearance('unmet'); defaults:flush()
+check(defaults.ns.db.options.showUnmetGuildName, 'style-only reset preserves unmet guild visibility')
+defaults.ns.ResetAppearance('all'); defaults:flush()
+check(not defaults.ns.db.options.showUnmetGuildName and not defaultUnmet.labels[2].shown, 'full display reset restores hidden unmet guild default')
 print('Acquainted: ' .. checks .. ' checks passed')
 return {}

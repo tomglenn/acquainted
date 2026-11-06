@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+
+- Add “Show guild names for unmet people”, off by default, in the Unmet people settings.
+- Unmet guilds appear beneath visible unmet names using the same colour and a smaller font.
+- Keep met and unmet guild visibility independent; unmet pets remain hidden.
+
 ## 0.3.2
 
 - Set the default name height to -40 for both met and unmet players.

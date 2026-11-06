@@ -3,7 +3,7 @@ ns.defaults = {
     enabled = true, showFriends = false, showGuild = false, showGroup = false,
     useTRPRelations = true, useRPNames = true, affectEnemies = false,
     showGuildName = true, showPetNames = true, fontSize = 22, nameOffset = -40,
-    metColour = "FFD100", showUnmetNames = true,
+    metColour = "FFD100", showUnmetNames = true, showUnmetGuildName = false,
     unmetFontSize = 14, unmetNameOffset = -40, unmetColour = "999999",
 }
 ns.optionRanges = {

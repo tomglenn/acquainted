@@ -62,13 +62,14 @@ Forgetting someone removes only the manual record. Enabled friend, guild, group,
 | Met name height | -40 | Adjust between -200 and 100; negative values move the name down |
 | Met name colour | Gold | Choose with the colour picker; applies to the guild line too |
 | Show names of people you have not met | On | Display unmet player names in their own style |
+| Show guild names for unmet people | Off | Show a smaller guild line beneath visible unmet names |
 | Unmet name size | 14 | Adjust between 8 and 48 |
 | Unmet name height | -40 | Adjust independently between -200 and 100 |
 | Unmet name colour | Grey | Choose independently with the colour picker |
 
-The **Met people** and **Unmet people** sections each have a style reset button. **Reset name display** restores both styles and the default of showing unmet names. These buttons preserve your acquaintances, nicknames, and friend/guild/group/TRP3 recognition rules. Existing met-name size and height preferences are preserved when upgrading.
+The **Met people** and **Unmet people** sections each have a style reset button. **Reset name display** restores both styles and the defaults of showing unmet names and hiding their guilds. These buttons preserve your acquaintances, nicknames, and friend/guild/group/TRP3 recognition rules. Existing met-name size and height preferences are preserved when upgrading.
 
-Met styling applies to anyone recognised by an enabled visibility rule, including friends or TRP3 relationships. If unmet names are enabled, they show only the player name; their guild and companion names remain hidden. The chosen colours apply to RP names as well. Colour-picker changes preview live, and Cancel restores the previous colour.
+Met styling applies to anyone recognised by an enabled visibility rule, including friends or TRP3 relationships. If unmet names are enabled, their guild can also be shown with **Show guild names for unmet people**. This is independent of the setting for known players and uses the unmet name style. Unmet companion names remain hidden. The chosen colours apply to RP names as well. Colour-picker changes preview live, and Cancel restores the previous colour.
 
 Your own character counts as a known companion owner. Switching companion names off hides the names of all managed companions, including your own. No owner guild line is displayed on pets.
 

@@ -4,7 +4,7 @@ local states = setmetatable({}, { __mode = "k" })
 local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
 local toggledAcquaintances = {}
-ns.version = "0.3.2"
+ns.version = "0.3.3"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then
@@ -75,7 +75,8 @@ local function Render(plate, visited)
     state.label:SetTextColor(r, g, b)
     state.label:SetText(ns.WithoutColourCodes(name))
     state.label:Show()
-    local guild = known and not companion and db.options.showGuildName and ns.GuildName(unit)
+    local showGuild = (known and db.options.showGuildName) or (not known and db.options.showUnmetGuildName)
+    local guild = not companion and showGuild and ns.GuildName(unit)
     if guild then
         state.guildLabel:SetFont(STANDARD_TEXT_FONT, math.max(8, math.floor(fontSize * 0.8)), "OUTLINE")
         state.guildLabel:ClearAllPoints()
@@ -153,7 +154,7 @@ function ns.ResetAppearance(which)
     if which == "met" then keys = { "fontSize", "nameOffset", "metColour" }
     elseif which == "unmet" then keys = { "unmetFontSize", "unmetNameOffset", "unmetColour" }
     elseif which == "all" then
-        keys = { "fontSize", "nameOffset", "metColour", "unmetFontSize", "unmetNameOffset", "unmetColour", "showUnmetNames" }
+        keys = { "fontSize", "nameOffset", "metColour", "unmetFontSize", "unmetNameOffset", "unmetColour", "showUnmetNames", "showUnmetGuildName" }
     else return false end
     if ns.CloseColourPicker then ns.CloseColourPicker() end
     for _, key in ipairs(keys) do db.options[key] = ns.defaults[key] end
