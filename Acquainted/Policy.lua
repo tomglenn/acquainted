@@ -1,9 +1,10 @@
 local _, ns = ...
 ns.defaults = {
-    enabled = true, showFriends = false, showGuild = false, showGroup = false,
+    enabled = true, showFriends = false, showGuild = true, showGroup = true,
     useTRPRelations = true, useRPNames = true, affectEnemies = false,
     showGuildName = true, showPetNames = true, fontSize = 22, nameOffset = -40,
-    metColour = "FFD100", showUnmetNames = true, showUnmetGuildName = false,
+    metColour = "FFD100", hideMet = false, hideUnmet = false, showUnmetGuildName = false,
+    unmetDisplay = "name", overlayOnly = false,
     unmetFontSize = 14, unmetNameOffset = -40, unmetColour = "999999",
 }
 ns.optionRanges = {
@@ -19,6 +20,7 @@ end
 
 function ns.NormalizeOption(key, value)
     if ns.defaults[key] == nil or type(value) ~= type(ns.defaults[key]) then return nil end
+    if key == "unmetDisplay" and value ~= "name" and value ~= "label" and value ~= "icon" then return nil end
     if key == "metColour" or key == "unmetColour" then return ns.NormalizeHex(value) end
     local range = ns.optionRanges[key]
     if range then
@@ -44,6 +46,32 @@ function ns.Appearance(known, options)
     return size, height, ns.ColourRGB(colour)
 end
 
+-- Plater owns its own unitFrame and text. Never manage its native display.
+function ns.UseOverlay(options)
+    return options.overlayOnly or type(Plater) == "table"
+end
+
+-- Instances use existing native settings; accessible outsider plates can still
+-- be styled. Group recognition is handled per player, not as a global pause.
+function ns.NativeSettingsReason()
+    if IsInInstance and IsInInstance() then return "instance" end
+end
+
+function ns.PlayerLabel(known, options, name)
+    if known then
+        if not options.hideMet then return name end
+    elseif not options.hideUnmet then
+        if options.unmetDisplay == "label" then return "Unmet" end
+        if options.unmetDisplay == "icon" then return "|TInterface\\AddOns\\Acquainted\\Media\\Unmet:0|t" end
+        return name
+    end
+end
+
+function ns.ShowGuild(known, options)
+    if known then return not options.hideMet and options.showGuildName end
+    return not options.hideUnmet and options.unmetDisplay == "name" and options.showUnmetGuildName
+end
+
 function ns.WithoutColourCodes(text)
     return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[%w_]+:", ""):gsub("|r", ""))
 end
@@ -58,7 +86,9 @@ function ns.Identity(unit)
     local guid = UnitGUID(unit)
     if not ns.IsReadable(guid) then return nil end
     local first, surname = (UnitNameUnmodified or UnitName)(unit)
-    if not ns.IsReadable(first) or not ns.IsReadable(surname) or not first then return nil end
+    -- Recognition and saved nicknames use the GUID even if the live name is
+    -- temporarily missing or restricted during nameplate assignment.
+    if not ns.IsReadable(first) or not ns.IsReadable(surname) or not first then return guid end
     local name = first
     if surname and surname ~= "" and first:sub(-#surname - 1) ~= " " .. surname
         and first:sub(-#surname - 1) ~= "-" .. surname then name = first .. " " .. surname end
@@ -81,6 +111,9 @@ local function Check(func, ...)
     local ok, value = pcall(func, ...)
     return ok and ns.IsReadable(value) and not not value
 end
+function ns.IsGroupMember(unit)
+    return unit and (Check(UnitInParty, unit) or Check(UnitInRaid, unit)) or false
+end
 function ns.KnownGUID(guid, unit, db)
     if not ns.IsReadable(guid) then return false, "owner unavailable" end
     local options = db.options
@@ -91,7 +124,7 @@ function ns.KnownGUID(guid, unit, db)
             or Check(C_BattleNet and C_BattleNet.GetAccountInfoByGUID, guid) then return true, "friend" end
     end
     if options.showGuild and guid and Check(IsGuildMember, guid) then return true, "guild" end
-    if options.showGroup and unit and (Check(UnitInParty, unit) or Check(UnitInRaid, unit)) then return true, "group" end
+    if options.showGroup and ns.IsGroupMember(unit) then return true, "group" end
     if options.useTRPRelations and ((unit and Check(ns.TRPRelation, unit))
         or (guid and Check(ns.TRPRelationByGUID, guid))) then return true, "TRP3 relationship" end
     return false, "unknown"
@@ -109,7 +142,7 @@ function ns.DisplayName(unit, db)
         end)
         if ok and ns.IsReadable(rpName) and type(rpName) == "string" and rpName ~= "" then return rpName end
     end
-    return name
+    return name or (record and record.name)
 end
 
 function ns.GuildName(unit)

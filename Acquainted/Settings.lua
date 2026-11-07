@@ -1,6 +1,7 @@
 local _, ns = ...
 local panel, category, refreshing, selectedTab, search, nicknameEditor
 local checks, sliders, values, rows, colours, previews, pages, tabs = {}, {}, {}, {}, {}, {}, {}, {}
+local transferDialog, displayChoices, overlayCaption
 local pickerSession, pickerHooked
 
 local function Text(parent, text, font, x, y, width)
@@ -199,8 +200,8 @@ local function ColourButton(parent, key, x, y)
 end
 local function AppearanceCard(parent, known, x)
     local card = CreateFrame("Frame", nil, parent)
-    card:SetSize(296, 454)
-    card:SetPoint("TOPLEFT", x, -8)
+    card:SetSize(296, 508)
+    card:SetPoint("TOPLEFT", x, -96)
     Background(card, 0.08, 0.08, 0.08, 0.85)
     Text(card, known and "Met people" or "Unmet people", "GameFontNormalLarge", 14, -14, 270)
     local preview = CreateFrame("Frame", nil, card)
@@ -210,40 +211,48 @@ local function AppearanceCard(parent, known, x)
     Background(preview, 0.025, 0.035, 0.045, 0.95)
     local name = preview:CreateFontString(nil, "OVERLAY")
     local guild = preview:CreateFontString(nil, "OVERLAY")
-    local hidden = Text(preview, "Names hidden", "GameFontDisable", 20, -48, 232)
+    local hidden = Text(preview, "Hidden", "GameFontDisable", 20, -48, 232)
     hidden:SetJustifyH("CENTER")
     previews[known and "met" or "unmet"] = { frame = preview, name = name, guild = guild, hidden = hidden }
-    if known then
-        Checkbox(card, "showGuildName", "Show guild", 10, -198, 248)
-    else
-        Checkbox(card, "showUnmetNames", "Show name", 10, -166, 248)
-        Checkbox(card, "showUnmetGuildName", "Show guild", 10, -198, 248,
-            "Show the guild beneath visible unmet names. This does not meet the player or reveal their pets.")
+    Checkbox(card, known and "hideMet" or "hideUnmet", "Hide", 10, -166, 248,
+        "Hide this category's Acquainted name or indicator and guild line. In overlay mode, existing names and health bars stay under your nameplate addon's control.")
+    Checkbox(card, known and "showGuildName" or "showUnmetGuildName", "Show guild", 10, -198, 248,
+        "Show the guild beneath a visible player name. Anonymous Unmet labels and icons have no guild line.")
+    if not known then
+        Text(card, "Display as", nil, 16, -234, 260)
+        displayChoices = {}
+        for index, choice in ipairs({ { "name", "Name" }, { "label", "Unmet" }, { "icon", "Icon" } }) do
+            local value, title = choice[1], choice[2]
+            local button = Button(card, title, 82, 16 + (index - 1) * 90, -254,
+                function() ns.SetOption("unmetDisplay", value) end, "Acquainted_Unmet_" .. value)
+            displayChoices[value] = { button = button, title = title }
+        end
     end
-    Slider(card, known and "fontSize" or "unmetFontSize", "Text size", -244)
-    Slider(card, known and "nameOffset" or "unmetNameOffset", "Vertical position", -316, "Lower", "Higher")
-    ColourButton(card, known and "metColour" or "unmetColour", 16, -388)
-    Button(card, "Reset appearance", 132, 148, -388, function() ns.ResetAppearance(known and "met" or "unmet") end,
+    Slider(card, known and "fontSize" or "unmetFontSize", "Text size", -298)
+    Slider(card, known and "nameOffset" or "unmetNameOffset", "Vertical position", -370, "Lower", "Higher")
+    ColourButton(card, known and "metColour" or "unmetColour", 16, -442)
+    Button(card, "Reset appearance", 132, 148, -442, function() ns.ResetAppearance(known and "met" or "unmet") end,
         known and "Acquainted_ResetMet" or "Acquainted_ResetUnmet")
-    Text(card, "Live preview · position shown at ¼ scale", "GameFontDisableSmall", 16, -429, 264)
+    Text(card, "Live preview · position shown at ¼ scale", "GameFontDisableSmall", 16, -483, 264)
 end
 local function RefreshPreviews()
     for kind, preview in pairs(previews) do
         local known = kind == "met"
-        local visible = known or ns.db.options.showUnmetNames
+        local text = ns.PlayerLabel(known, ns.db.options, "Alex Rowan")
+        local visible = text ~= nil
         local size, height, r, g, b = ns.Appearance(known, ns.db.options)
         preview.name:SetFont(STANDARD_TEXT_FONT, size, "OUTLINE")
         preview.name:ClearAllPoints()
         preview.name:SetPoint("BOTTOM", preview.frame, "BOTTOM", 0, 62 + height / 4)
         preview.name:SetTextColor(r, g, b)
-        preview.name:SetText("Alex Rowan")
+        preview.name:SetText(text or "Alex Rowan")
         preview.name:SetShown(visible)
         preview.guild:SetFont(STANDARD_TEXT_FONT, math.max(8, math.floor(size * 0.8)), "OUTLINE")
         preview.guild:ClearAllPoints()
         preview.guild:SetPoint("TOP", preview.name, "BOTTOM", 0, -2)
         preview.guild:SetTextColor(r, g, b)
         preview.guild:SetText("<Wayfarers>")
-        local showGuild = (known and ns.db.options.showGuildName) or (not known and ns.db.options.showUnmetGuildName)
+        local showGuild = ns.ShowGuild(known, ns.db.options)
         preview.guild:SetShown(visible and showGuild)
         preview.hidden:SetShown(not visible)
     end
@@ -269,7 +278,7 @@ local function RefreshPeople()
         end
     end
     table.sort(people, function(a, b) return a.name:lower() < b.name:lower() end)
-    panel.count:SetText(query == "" and (total .. " acquaintances") or (#people .. " of " .. total .. " acquaintances"))
+    panel.count:SetText(query == "" and (total .. (total == 1 and " acquaintance" or " acquaintances")) or (#people .. " of " .. total .. " acquaintances"))
     for _, row in ipairs(rows) do row:Hide() end
     for index, person in ipairs(people) do
         local row = rows[index]
@@ -290,22 +299,14 @@ local function RefreshPeople()
     end
     panel.empty:SetText(total == 0 and "No acquaintances yet. Target a player and choose Meet." or "No matching acquaintances.")
     panel.empty:SetShown(#people == 0)
-    panel.listContent:SetHeight(math.max(210, #people * 46))
+    local listHeight = math.max(46, #people * 46)
+    panel.listContent:SetHeight(listHeight)
+    pages.Acquaintances.content:SetHeight(142 + listHeight + 16)
     if nicknameEditor.guid and not ns.db.known[nicknameEditor.guid] then
         nicknameEditor.guid = nil
         nicknameEditor:Hide()
     end
-    local ok, guid, name = pcall(function()
-        if ns.IsPlayer("target") and not UnitIsUnit("target", "player") then return ns.Identity("target") end
-    end)
-    panel.targetGUID = ok and guid or nil
-    panel.targetName = ok and name or nil
-    local knownOK, known = pcall(ns.Known, "target", ns.db)
-    local description = panel.targetGUID and (ns.db.known[panel.targetGUID] and "Met" or (knownOK and known and "Recognised automatically" or "Unmet"))
-    panel.targetCaption:SetText(description and ("Current target · " .. description) or "Current target")
-    panel.targetLabel:SetText(panel.targetName and ns.WithoutColourCodes(panel.targetName) or "Target a player to meet them")
-    panel.targetButton:SetEnabled(panel.targetGUID ~= nil)
-    panel.targetButton:SetText(panel.targetGUID and ns.db.known[panel.targetGUID] and "Forget" or "Meet")
+
 end
 function ns.RefreshSettings()
     if not panel or refreshing then return end
@@ -319,15 +320,22 @@ function ns.RefreshSettings()
         values[key]:SetTextColor(1, 1, 1, values[key]:HasFocus() and 1 or 0)
     end
     for key, swatch in pairs(colours) do swatch:SetColorTexture(ns.ColourRGB(ns.db.options[key])) end
+    if displayChoices then
+        for value, choice in pairs(displayChoices) do
+            choice.button:SetText(ns.db.options.unmetDisplay == value and ("|cffffd100" .. choice.title .. "|r") or choice.title)
+        end
+    end
+    if overlayCaption then overlayCaption:SetText(type(Plater) == "table" and "Plater detected · labels are added alongside its names automatically." or "For other nameplate addons. Existing names stay visible, so names may appear twice.") end
     RefreshPreviews()
     if selectedTab == "Acquaintances" then RefreshPeople() end
-    panel.status:SetText(ns.db.options.enabled and "Changes apply immediately." or
-        (next(ns.db.restore) and "Off · restoring original settings when combat ends." or "Off · original name settings restored."))
+    ns.lastShownStatus = ns.DisplayStatus()
+    panel.status:SetText(ns.lastShownStatus)
     refreshing = false
 end
 function ns.FinishSettingsInput()
     for _, input in pairs(values) do input:ClearFocus() end
     if search then search:ClearFocus() end
+    if transferDialog then transferDialog:Hide() end
     if nicknameEditor then nicknameEditor.input:ClearFocus(); nicknameEditor:Hide() end
 end
 local function SelectTab(name)
@@ -345,6 +353,22 @@ local function Page(name, height)
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(640, height)
     scroll:SetScrollChild(content)
+    scroll.content = content
+    scroll.scrollBarHideable = true
+    local function UpdateScrolling()
+        local height = scroll:GetHeight()
+        local range = math.max(0, content:GetHeight() - height)
+        local bar = scroll.ScrollBar or _G["Acquainted_" .. name .. "PageScrollBar"]
+        if bar then bar:SetShown(height > 0 and range > 0) end
+        if height > 0 then
+            scroll:SetVerticalScroll(math.min(scroll:GetVerticalScroll(), range))
+        end
+    end
+    scroll:HookScript("OnScrollRangeChanged", UpdateScrolling)
+    scroll:HookScript("OnSizeChanged", UpdateScrolling)
+    scroll:HookScript("OnShow", UpdateScrolling)
+    content:SetScript("OnSizeChanged", UpdateScrolling)
+    UpdateScrolling()
     pages[name] = scroll
     return content
 end
@@ -366,19 +390,25 @@ function ns.CreateSettings()
     tabs.Help = Button(panel, "Help", 94, 526, -88, function() SelectTab("Help") end, "Acquainted_HelpTab")
     panel.status = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     panel.status:SetPoint("BOTTOMLEFT", 16, 16)
-    local appearance = Page("Appearance", 568)
+    local appearance = Page("Appearance", 778)
+    Text(appearance, "Uses Blizzard's friendly nameplates", "GameFontNormal", 16, -8, 600)
+    Text(appearance, "Acquainted uses friendly nameplates to position custom names. Outside instances, it temporarily enables the settings it needs without changing your saved preferences.", nil, 16, -32, 600)
     AppearanceCard(appearance, true, 16)
     AppearanceCard(appearance, false, 328)
-    Checkbox(appearance, "showPetNames", "Show pet and minion names for people you know", 16, -474, 570,
+    Checkbox(appearance, "showPetNames", "Show pet and minion names for people you know", 16, -618, 570,
         "Includes your own companions. Pets of unmet people stay hidden, even when unmet player names are visible.")
-    Button(appearance, "Reset all appearance", 180, 22, -522, function() ns.ResetAppearance("all") end, "Acquainted_ResetAll")
-    Text(appearance, "Keeps acquaintances and recognition rules.", "GameFontDisableSmall", 216, -529, 400)
-    local recognition = Page("Recognition", 530)
+    Checkbox(appearance, "overlayOnly", "Add labels alongside existing names", 16, -656, 570,
+        "Use with another nameplate addon. Keep its names and health bars, and add Acquainted labels alongside them. This can show duplicate names. Automatic with Plater. Change outside combat.")
+    overlayCaption = Text(appearance, "", "GameFontDisableSmall", 48, -694, 560)
+    Button(appearance, "Reset all appearance", 180, 22, -730, function() ns.ResetAppearance("all") end, "Acquainted_ResetAll")
+    Text(appearance, "Keeps acquaintances and recognition rules.", "GameFontDisableSmall", 216, -737, 400)
+    local recognition = Page("Recognition", 390)
     Text(recognition, "Who should count as someone you know?", "GameFontNormalLarge", 16, -12, 600)
-    Text(recognition, "These people use your met appearance without needing to Meet them.", nil, 16, -44, 590)
+    Text(recognition, "These people count as met automatically. Native health bars stay visible if enabled.", nil, 16, -44, 590)
     Checkbox(recognition, "showFriends", "Friends", 16, -82, 550, "Includes character friends and Battle.net friends.")
     Checkbox(recognition, "showGuild", "Guild members", 16, -122, 550)
-    Checkbox(recognition, "showGroup", "Party and raid members", 16, -162, 550)
+    Checkbox(recognition, "showGroup", "Party and raid members", 16, -162, 550,
+        "Use met styling for current party and raid members without saving them. Grouping keeps outsider styling active and preserves native player health bars.")
     Checkbox(recognition, "useTRPRelations", "Total RP 3 relationships", 16, -202, 550,
         "Recognise any TRP3 relationship except None. Total RP 3 is optional; other players do not need Acquainted.")
     Text(recognition, "Which name should appear?", "GameFontNormal", 16, -270, 600)
@@ -387,29 +417,20 @@ function ns.CreateSettings()
     local advanced = CreateFrame("Frame", nil, recognition)
     advanced:SetPoint("TOPLEFT", 0, -392); advanced:SetSize(640, 120); advanced:Hide()
     Checkbox(advanced, "affectEnemies", "Also filter enemy players", 16, -4, 550,
-        "Apply Acquainted to enemy players and their companions too. This also hides their player health bars. Change this outside combat.")
-    Text(advanced, "Also hides enemy player health bars. Change this outside combat.", "GameFontDisableSmall", 48, -44, 550)
+        "Apply Acquainted to enemy players and their companions too. Health bars are preserved. Change this outside combat.")
+    Text(advanced, "Health bars are preserved. Change this outside combat.", "GameFontDisableSmall", 48, -44, 550)
     local advancedButton
     advancedButton = Button(recognition, "+ Advanced", 144, 16, -354, function()
         local shown = not advanced:IsShown()
         advanced:SetShown(shown)
+        recognition:SetHeight(shown and 476 or 390)
         advancedButton:SetText(shown and "− Advanced" or "+ Advanced")
     end, "Acquainted_AdvancedButton")
-    local people = Page("Acquaintances", 440)
-    Text(people, "Your acquaintances", "GameFontNormalLarge", 16, -12, 600)
+    local people = Page("Acquaintances", 204)
+    Text(people, "Your acquaintances", "GameFontNormalLarge", 16, -12, 290)
     Text(people, "Saved separately for this character.", "GameFontDisableSmall", 16, -40, 600)
-    local target = CreateFrame("Frame", nil, people)
-    target:SetPoint("TOPLEFT", 16, -64); target:SetSize(592, 60)
-    Background(target, 0.08, 0.08, 0.08, 0.85)
-    panel.targetCaption = Text(target, "Current target", "GameFontDisableSmall", 12, -8, 420)
-    panel.targetLabel = Text(target, "", nil, 12, -28, 420)
-    panel.targetButton = Button(target, "Meet", 110, 466, -18, function()
-        local guid, name = panel.targetGUID, panel.targetName
-        if guid and name then ns.SetRemembered(guid, name, ns.db.known[guid] ~= nil) end
-    end, "Acquainted_TargetButton")
-    Tooltip(panel.targetButton, "Meet / Forget", "Change your saved acquaintance for this player. Enabled recognition rules can still give them the met appearance after you forget them.")
-    Text(people, "Search names or nicknames", nil, 16, -146, 300)
-    search = Input(people, "Acquainted_Search", 302, 22, -170)
+    Text(people, "Search names or nicknames", nil, 16, -78, 300)
+    search = Input(people, "Acquainted_Search", 302, 22, -102)
     search:SetScript("OnTextChanged", function()
         if not refreshing then
             panel.peopleScroll:SetVerticalScroll(0)
@@ -417,14 +438,95 @@ function ns.CreateSettings()
         end
     end)
     search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-    panel.count = Text(people, "", "GameFontDisableSmall", 346, -177, 260)
-    local scroll = CreateFrame("ScrollFrame", nil, people, "UIPanelScrollFrameTemplate")
-    panel.peopleScroll = scroll
-    scroll:SetPoint("TOPLEFT", 16, -210); scroll:SetSize(562, 210)
-    panel.listContent = CreateFrame("Frame", "Acquainted_AcquaintanceList", scroll)
-    panel.listContent:SetSize(554, 210); scroll:SetScrollChild(panel.listContent)
+    panel.count = Text(people, "", "GameFontDisableSmall", 346, -109, 260)
+    panel.peopleScroll = pages.Acquaintances
+    panel.listContent = CreateFrame("Frame", "Acquainted_AcquaintanceList", people)
+    panel.listContent:SetPoint("TOPLEFT", 16, -142)
+    panel.listContent:SetSize(554, 46)
     panel.empty = Text(panel.listContent, "", nil, 4, -10, 540)
-    -- Parent to the fixed settings canvas, outside both scrolling containers.
+    transferDialog = CreateFrame("Frame", "Acquainted_TransferDialog", panel)
+    transferDialog:SetPoint("CENTER", panel, "CENTER", 0, 0)
+    transferDialog:SetSize(592, 402)
+    transferDialog:SetFrameLevel(panel:GetFrameLevel() + 25)
+    transferDialog:EnableMouse(true)
+    Background(transferDialog, 0.06, 0.06, 0.06, 1)
+    transferDialog.title = Text(transferDialog, "", "GameFontNormalLarge", 16, -16, 560)
+    transferDialog.help = Text(transferDialog, "", nil, 16, -46, 560)
+    local transferScroll = CreateFrame("ScrollFrame", nil, transferDialog, "UIPanelScrollFrameTemplate")
+    transferScroll:SetPoint("TOPLEFT", 16, -90); transferScroll:SetSize(534, 150)
+    local transferInput = Input(transferScroll, "Acquainted_TransferInput", 530, 0, 0)
+    transferInput:SetMultiLine(true)
+    transferInput:SetHeight(150)
+    transferInput:SetMaxLetters(ns.transferLimit + 1)
+    transferInput:SetJustifyV("TOP")
+    transferScroll:SetScrollChild(transferInput)
+    transferDialog.summary = Text(transferDialog, "", "GameFontHighlightSmall", 16, -252, 560)
+    local replace = CreateFrame("CheckButton", "Acquainted_TransferReplace", transferDialog, "UICheckButtonTemplate")
+    replace:SetPoint("TOPLEFT", 10, -286)
+    Text(replace, "Replace entire list (removes people absent from import)", nil, 30, -7, 530)
+    local overwrite = CreateFrame("CheckButton", "Acquainted_TransferOverwrite", transferDialog, "UICheckButtonTemplate")
+    overwrite:SetPoint("TOPLEFT", 10, -318)
+    Text(overwrite, "Use imported names and nicknames for existing people", nil, 30, -7, 530)
+    local commit
+    local function Invalidate()
+        transferDialog.preview = nil
+        if commit then commit:SetEnabled(false) end
+        if transferDialog.importing then transferDialog.summary:SetText("Preview the pasted list before importing.") end
+    end
+    transferInput:SetScript("OnTextChanged", function(self)
+        self:SetHeight(math.max(150, self:GetStringHeight() + 16))
+        Invalidate()
+    end)
+    replace:SetScript("OnClick", Invalidate)
+    overwrite:SetScript("OnClick", Invalidate)
+    local preview = Button(transferDialog, "Preview import", 132, 16, -364, function()
+        local result, err = ns.PreviewImport(transferInput:GetText())
+        transferDialog.preview = result and transferInput:GetText() or nil
+        transferDialog.previewRevision = ns.peopleRevision or 0
+        commit:SetEnabled(result ~= nil)
+        if not result then transferDialog.summary:SetText(err); return end
+        local message = result.count .. " people: " .. result.added .. " new, " .. result.existing .. " existing; " .. result.conflicts .. " nickname conflicts."
+        transferDialog.summary:SetText(message .. (replace:GetChecked() and (" Replacement removes " .. result.removed .. " local entries.") or " Existing entries are kept unless overwrite is selected."))
+        commit:SetText(replace:GetChecked() and "Replace list" or "Merge list")
+    end, "Acquainted_TransferPreview")
+    commit = Button(transferDialog, "Merge list", 132, 158, -364, function()
+        if not transferDialog.importing or transferDialog.preview ~= transferInput:GetText() then return end
+        if transferDialog.previewRevision ~= (ns.peopleRevision or 0) then
+            Invalidate()
+            transferDialog.summary:SetText("Your local list changed. Preview the import again.")
+            return
+        end
+        local ok, count = ns.ImportPeople(transferDialog.preview, replace:GetChecked(), overwrite:GetChecked())
+        if not ok then transferDialog.summary:SetText(count); return end
+        transferDialog:Hide()
+        ns.Say("Imported " .. count .. " acquaintances.")
+    end, "Acquainted_TransferCommit")
+    Button(transferDialog, "Close", 110, 462, -364, function() transferDialog:Hide() end, "Acquainted_TransferClose")
+    transferDialog:SetScript("OnHide", function() transferInput:ClearFocus(); Invalidate() end)
+    local function OpenTransfer(importing)
+        ns.FinishSettingsInput()
+        transferDialog.importing = importing
+        replace:SetChecked(false); overwrite:SetChecked(false)
+        replace:SetShown(importing); overwrite:SetShown(importing)
+        preview:SetShown(importing); commit:SetShown(importing); commit:SetEnabled(false)
+        transferDialog.title:SetText(importing and "Import acquaintances" or "Export acquaintances")
+        transferDialog.help:SetText(importing and "Paste an export from another machine, then preview it. Merge keeps local entries by default." or "Select and copy all text below to transfer your manual Met list and nicknames to another machine.")
+        local text, err = "", nil
+        if not importing then text, err = ns.ExportPeople() end
+        transferInput:SetText(text or "")
+        transferDialog.summary:SetText(importing and "Preview the pasted list before importing." or (err or "Only acquaintances and nicknames are included. Settings stay on this machine."))
+        transferScroll:SetVerticalScroll(0)
+        transferDialog:Show()
+        transferInput:SetFocus()
+        if not importing then transferInput:HighlightText() end
+    end
+    local exportButton = Button(people, "Export list", 132, 330, -8, function() OpenTransfer(false) end, "Acquainted_Export")
+    local importButton = Button(people, "Import list", 132, 476, -8, function() OpenTransfer(true) end, "Acquainted_Import")
+    Tooltip(exportButton, "Export list", "Copy your manual acquaintances and nicknames to another machine.")
+    Tooltip(importButton, "Import list", "Paste an exported list and preview it before merging or replacing acquaintances.")
+    transferInput:SetScript("OnEscapePressed", function() transferDialog:Hide() end)
+    transferDialog:Hide()
+    -- Parent to the fixed settings canvas, outside the scrolling page.
     -- The editor must remain visible regardless of the list's scroll position.
     nicknameEditor = CreateFrame("Frame", "Acquainted_NicknameEditor", panel)
     nicknameEditor:SetPoint("CENTER", panel, "CENTER", 0, 0)
@@ -445,13 +547,31 @@ function ns.CreateSettings()
     Text(nicknameEditor, "Leave blank to use their roleplay or game name.", "GameFontDisableSmall", 16, -96, 560)
     nicknameEditor:SetScript("OnHide", function() nicknameEditor.input:ClearFocus() end)
     nicknameEditor:Hide()
-    local help = Page("Help", 470)
-    Text(help, "Getting started", "GameFontNormalLarge", 16, -12, 600)
-    Text(help, "Target a player and choose Meet in Acquaintances or their right-click menu. Other players do not need an addon.", nil, 16, -48, 580)
-    Text(help, "Useful commands", "GameFontNormal", 16, -116, 600)
-    Text(help, "/acq — open settings\n/acq togglemet — Meet / Forget your target with the same keybind\n/acq meet [nickname] — meet your target, optionally with a nickname\n/acq forget — forget your target\n/acq off — turn off and restore the original game settings", nil, 16, -148, 590)
-    Text(help, "A few things to know", "GameFontNormal", 16, -286, 600)
-    Text(help, "Forgetting removes the saved acquaintance. Recognition rules can still give them the met appearance.\n\nNames use Blizzard's nameplate range. Chat and tooltips still show names. Pet filtering also hides ordinary critter names while Acquainted is active.", nil, 16, -318, 580)
+    local help = Page("Help", 1)
+    local helpBlocks = {}
+    local function HelpBlock(text, font, gap)
+        helpBlocks[#helpBlocks + 1] = { text = Text(help, text, font, 16, 0, 590), gap = gap }
+    end
+    HelpBlock("Getting started", "GameFontNormalLarge", 0)
+    HelpBlock("Target a player and use /acq meet, or choose Meet in their right-click menu. Other players do not need an addon.", nil, 10)
+    HelpBlock("Useful commands", "GameFontNormal", 20)
+    HelpBlock("/acq — open settings\n/acq togglemet — Meet / Forget your target\n/acq meet [nickname] — meet your target, optionally with a nickname\n/acq forget — forget your target\n/acq off — turn off and restore the original game settings", nil, 10)
+    HelpBlock("What affects name display?", "GameFontNormal", 20)
+    HelpBlock("Friendly nameplates / Always show nameplates: needed for custom names.\nShow only name: controls friendly health bars, including unmet players. You can change it while Acquainted is active.\nOther nameplate addons: Plater is automatic. For others, try Add labels alongside existing names.\nInstances: Blizzard may restrict custom displays.", nil, 10)
+    HelpBlock("A few things to know", "GameFontNormal", 20)
+    HelpBlock("Grouping keeps met/unmet names active. Party and raid members count as met by default; health bars follow your settings.\n\nForgetting removes a saved acquaintance. Recognition rules can still count them as met. Use Acquaintances to export or import your list.\n\nIf a required visibility setting changes, filtering stops. Use /acq status for details or /acq setup to retry. Combat may delay cleanup.", nil, 10)
+    local function LayoutHelp()
+        local y = 12
+        for _, block in ipairs(helpBlocks) do
+            y = y + block.gap
+            block.text:ClearAllPoints()
+            block.text:SetPoint("TOPLEFT", 16, -y)
+            y = y + math.max(14, block.text:GetStringHeight())
+        end
+        help:SetHeight(y + 16)
+    end
+    pages.Help:HookScript("OnShow", LayoutHelp)
+    LayoutHelp()
     category = Settings.RegisterCanvasLayoutCategory(panel, "Acquainted")
     Settings.RegisterAddOnCategory(category)
     panel:SetScript("OnShow", ns.RefreshSettings)

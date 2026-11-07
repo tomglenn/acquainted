@@ -37,6 +37,7 @@ class ReleaseTests(unittest.TestCase):
             names = set(package.namelist())
             self.assertIn("Acquainted/Acquainted.toc", names)
             self.assertIn("Acquainted/Acquainted.lua", names)
+            self.assertEqual((self.root / "Acquainted/Media/Unmet.tga").read_bytes(), package.read("Acquainted/Media/Unmet.tga"))
             self.assertIn("Acquainted/README.md", names)
             self.assertIn("Acquainted/CHANGELOG.md", names)
             self.assertTrue(all(name.startswith("Acquainted/") for name in names))
@@ -67,6 +68,12 @@ class ReleaseTests(unittest.TestCase):
         (self.root / "CHANGELOG.md").write_text("# Changelog\n")
         with self.assertRaisesRegex(ValueError, "changelog"):
             build(self.root, self.output)
+
+    def test_account_wide_cleanup_state_is_declared(self):
+        toc = self.root / "Acquainted" / "Acquainted.toc"
+        toc.write_text(toc.read_text().replace("## SavedVariables: AcquaintedRuntime\n", ""))
+        with self.assertRaisesRegex(ValueError, "cleanup state"):
+            package_files(self.root)
 
     def test_manifest_must_not_escape_addon(self):
         toc = self.root / "Acquainted" / "Acquainted.toc"
@@ -101,6 +108,31 @@ class ReleaseTests(unittest.TestCase):
         backup = install(self.root / "Acquainted", destination, backups)
         self.assertEqual("-- previous installation", (backup / "Acquainted.lua").read_text())
         self.assertEqual((self.root / "Acquainted" / "Acquainted.lua").read_bytes(), main.read_bytes())
+
+    def test_installer_requires_transfer_module_before_updating(self):
+        destination = self.root / "game" / "Interface" / "AddOns" / "Acquainted"
+        backups = self.root / "backups"
+        install(self.root / "Acquainted", destination, backups)
+        before = (destination / "Acquainted.lua").read_bytes()
+        (self.root / "Acquainted" / "Transfer.lua").unlink()
+        with self.assertRaisesRegex(RuntimeError, "Transfer.lua"):
+            install(self.root / "Acquainted", destination, backups)
+        self.assertEqual(before, (destination / "Acquainted.lua").read_bytes())
+        self.assertFalse(backups.exists())
+
+    def test_icon_is_installed_and_required_before_updating(self):
+        source = self.root / "Acquainted"
+        destination = self.root / "game" / "Interface" / "AddOns" / "Acquainted"
+        backups = self.root / "backups"
+        install(source, destination, backups)
+        icon = source / "Media/Unmet.tga"
+        self.assertEqual(icon.read_bytes(), (destination / "Media/Unmet.tga").read_bytes())
+        icon.unlink()
+        with self.assertRaisesRegex(RuntimeError, "Unmet.tga"):
+            install(source, destination, backups)
+        with self.assertRaisesRegex(ValueError, "texture"):
+            package_files(self.root)
+        self.assertFalse(backups.exists())
 
     def test_installer_does_not_touch_game_saves(self):
         destination = self.root / "game" / "Interface" / "AddOns" / "Acquainted"

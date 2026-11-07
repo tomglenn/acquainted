@@ -46,6 +46,13 @@ def package_files(root: Path) -> tuple[str, list[tuple[Path, str]]]:
             if source.is_symlink() or not source.is_file() or not source.resolve().is_relative_to(addon.resolve()):
                 raise ValueError("Manifest file is missing or leaves the addon folder")
             files.append((source, "Acquainted/" + str(relative)))
+    # Textures are referenced by Lua, not loaded as TOC scripts. Keep a strict
+    # asset whitelist so local files cannot accidentally enter the release.
+    for asset in ("Media/Unmet.tga",):
+        source = addon / asset
+        if source.is_symlink() or not source.is_file() or not source.resolve().is_relative_to(addon.resolve()):
+            raise ValueError("Required texture is missing or leaves the addon folder")
+        files.append((source, "Acquainted/" + asset))
     version = metadata.get("Version", "")
     if not re.fullmatch(VERSION_PATTERN, version):
         raise ValueError("Manifest must contain a semantic release version")
@@ -55,6 +62,8 @@ def package_files(root: Path) -> tuple[str, list[tuple[Path, str]]]:
         raise ValueError("This package targets the Forever interface")
     if metadata.get("SavedVariablesPerCharacter") != "AcquaintedDB":
         raise ValueError("Unexpected saved-variable declaration")
+    if metadata.get("SavedVariables") != "AcquaintedRuntime":
+        raise ValueError("Account-wide cleanup state must be declared in the manifest")
     runtime = (addon / "Acquainted.lua").read_text(encoding="utf-8")
     match = re.search(r'^ns\.version\s*=\s*"([^"]+)"', runtime, re.M)
     if not match or match.group(1) != version:

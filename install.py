@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 
 ADDON_ID = "Acquainted"
-FILES = ("Policy.lua", "GameSettings.lua", "Settings.lua", "ContextMenus.lua", "Acquainted.lua", "Acquainted.toc")
+FILES = ("Policy.lua", "GameSettings.lua", "Transfer.lua", "Settings.lua", "ContextMenus.lua", "Acquainted.lua", "Acquainted.toc", "Media/Unmet.tga")
 
 
 def install(source: Path, destination: Path, backups: Path) -> Path | None:
