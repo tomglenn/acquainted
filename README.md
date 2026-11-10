@@ -6,6 +6,8 @@ Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It
 
 ## Features
 
+- **Recent players:** find the last 50 group members and 50 nearby players under Acquaintances → Recent players. Meet someone after they have left or logged out, using their saved character identity. Group history has its own capacity, protected from nearby crowds.
+
 - Meet and Forget actions in player portrait, party, and raid context menus.
 - Styled overhead names and a smaller guild line, without introducing unwanted health bars.
 - Met/unmet styling stays active while grouped, with native party/raid health bars preserved according to existing preferences.
@@ -41,6 +43,14 @@ python3 install.py --addons-dir "/path/to/_forever_/Interface/AddOns"
 
 On macOS, running `python3 install.py` also detects the standard installation location. The installer permits updates while WoW is running and backs up existing Acquainted files locally. Use `/reload` for Lua updates; new addon folders or changed metadata may require restarting the game. **For the upgrade to 0.6.0, fully restart WoW once after installing** so the new account-wide cleanup bookkeeping is loaded.
 
+## Recent players
+
+Open **Acquaintances → Recent players** to find someone you missed before a party disbanded. Group members appear first, followed by nearby players. The list stays still while you browse; click **Refresh list** to load newer encounters. Search their game or RP name and click **Meet**, even after they have gone offline. Met players move to **Saved acquaintances**, where you can edit their nickname.
+
+Each character keeps up to **50 group members and 50 nearby players**, saved across reloads. Within each history, a new encounter replaces the least recent one; nearby players cannot evict group members. Someone in both histories appears only under Group members. **Clear history** removes recent entries after confirmation, keeping your saved acquaintances.
+
+History starts collecting after this update while Acquainted is enabled, respecting IC-only mode. Group members are recorded from the roster even without visible nameplates; nearby players must be exposed through nameplates or player-name updates. NPCs, pets, your character, and unreadable identities are excluded. Only names, character IDs, encounter types and times are stored—not full RP profiles. Export/import includes permanent acquaintances and nicknames, not recent history.
+
 ## Getting started
 
 1. Type `/acq` to open settings.
@@ -57,6 +67,8 @@ Forgetting someone removes only the manual record. Enabled friend, guild, group,
 - **Recognition:** choose who automatically counts as met. The roleplay-name preference is separate; enemy filtering is under **Advanced**.
 - **Acquaintances:** search saved names and nicknames, edit a nickname, or forget a saved person. **Export list** and **Import list** sit at the top right beside **Your acquaintances**. Save a blank nickname to use their roleplay or game name again.
 - **Help:** commands, keybind guidance, and a short list of Blizzard settings and addon/instance restrictions that affect name display.
+
+Navigation uses native WoW tabs, with smaller **Saved / Recent** tabs inside Acquaintances. Red buttons perform actions such as Meet, Refresh list, and Clear history.
 
 The enable switch remains available on every tab. Changes apply immediately; typing Escape cancels a number or nickname edit. Numeric changes also apply when you click away. Switching off restores the original managed game settings.
 

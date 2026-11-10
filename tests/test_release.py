@@ -37,6 +37,7 @@ class ReleaseTests(unittest.TestCase):
             names = set(package.namelist())
             self.assertIn("Acquainted/Acquainted.toc", names)
             self.assertIn("Acquainted/Acquainted.lua", names)
+            self.assertIn("Acquainted/Recent.lua", names)
             self.assertEqual((self.root / "Acquainted/Media/Unmet.tga").read_bytes(), package.read("Acquainted/Media/Unmet.tga"))
             self.assertIn("Acquainted/README.md", names)
             self.assertIn("Acquainted/CHANGELOG.md", names)
@@ -132,6 +133,17 @@ class ReleaseTests(unittest.TestCase):
             install(source, destination, backups)
         with self.assertRaisesRegex(ValueError, "texture"):
             package_files(self.root)
+        self.assertFalse(backups.exists())
+
+    def test_installer_requires_recent_module_before_updating(self):
+        destination = self.root / "game" / "Interface" / "AddOns" / "Acquainted"
+        backups = self.root / "backups"
+        install(self.root / "Acquainted", destination, backups)
+        before = (destination / "Acquainted.lua").read_bytes()
+        (self.root / "Acquainted" / "Recent.lua").unlink()
+        with self.assertRaisesRegex(RuntimeError, "Recent.lua"):
+            install(self.root / "Acquainted", destination, backups)
+        self.assertEqual(before, (destination / "Acquainted.lua").read_bytes())
         self.assertFalse(backups.exists())
 
     def test_installer_does_not_touch_game_saves(self):

@@ -5,7 +5,7 @@ local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
 local appliedNativeSettings
 local toggledAcquaintances = {}
-ns.version = "0.7.5"
+ns.version = "0.8.1"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then
@@ -187,7 +187,12 @@ local function Service()
         if enabled and (not active or needsSetup) then
             -- Timer only: settings callbacks must finish before any CVar write.
             local applied, reason = ns.GameSettings.Apply(db, db.options)
-            if applied then active, needsSetup, appliedNativeSettings = true, false, nativeSettings
+            if applied then
+                active, needsSetup, appliedNativeSettings = true, false, nativeSettings
+                ns.Recent.CaptureGroup()
+                for _, plate in ipairs(C_NamePlate.GetNamePlates(false)) do
+                    if CanTouch(plate) then ns.Recent.CaptureNearby(plate.namePlateUnitToken) end
+                end
             elseif reason ~= "combat" then
                 active, failed = false, true
                 ns.GameSettings.Restore(db)
@@ -206,6 +211,7 @@ local function Service()
             local applied, key = ns.GameSettings.CheckApplied()
             if not applied then error(key .. " changed outside Acquainted. Filtering stopped to preserve the other setting; /acq setup to retry.") end
         end
+        ns.Recent.RetryPending()
         RenderAll()
     end)
     if not ok then
@@ -215,6 +221,7 @@ local function Service()
         ns.GameSettings.Restore(db)
     end
     servicing = false
+    if ns.RefreshRecentPlayers then ns.RefreshRecentPlayers(ns.Recent.ConsumeDirty()) end
     if ns.RefreshSettings and (wasActive ~= active or hadRestore ~= ns.GameSettings.HasPending(db) or wasNativeReason ~= ns.nativeSettingsReason
         or wasFailed ~= failed or ns.lastShownStatus ~= ns.DisplayStatus()) then ns.RefreshSettings() end
 end
@@ -255,6 +262,7 @@ function ns.ClearRememberedUndo()
     toggledAcquaintances = {}
 end
 function ns.PeopleChanged()
+    ns.Recent.PruneKnown()
     ns.peopleRevision = (ns.peopleRevision or 0) + 1
     ns.Queue()
     if ns.RefreshSettings then ns.RefreshSettings() end
@@ -376,6 +384,7 @@ local function Start()
     if db.enabled ~= nil then db.options.enabled = db.enabled; db.enabled = nil end
     db.schema = 4
     ns.db = db
+    ns.Recent.Initialize(db)
     ns.GameSettings.WatchNamesOnly(function(key, value)
         if active and not servicing and not stopping and db.options.enabled
             and not ns.UseOverlay(db.options) and not ns.NativeSettingsReason() then
@@ -441,6 +450,8 @@ events:SetScript("OnEvent", function(_, event, unit, value)
     elseif not db then return
     elseif event == "PLAYER_LOGOUT" or event == "ADDONS_UNLOADING" then Unload()
     else
+        if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then ns.Recent.CaptureGroup() end
+        if event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_NAME_UPDATE" then ns.Recent.CaptureNearby(unit) end
         if event == "CVAR_UPDATE" and active and not servicing and not stopping and db.options.enabled
             and not ns.UseOverlay(db.options) and not ns.NativeSettingsReason() then
             ns.GameSettings.ObserveNamesOnly(unit, value)

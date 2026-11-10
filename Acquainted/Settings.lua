@@ -2,6 +2,11 @@ local _, ns = ...
 local panel, category, refreshing, selectedTab, search, nicknameEditor
 local checks, sliders, values, rows, colours, previews, pages, tabs = {}, {}, {}, {}, {}, {}, {}, {}
 local transferDialog, displayChoices, overlayCaption
+local peopleView = "saved"
+local recentRows, recentHeaders, peopleChoices = {}, {}, {}
+local peopleTitle, peopleSubtitle, recentClearDialog
+local recentNeedsRefresh, recentSnapshot = false, nil
+local PEOPLE_LIST_TOP = 172
 local pickerSession, pickerHooked
 
 local function Text(parent, text, font, x, y, width)
@@ -32,6 +37,63 @@ local function Button(parent, text, width, x, y, onClick, name)
     button:SetText(text)
     button:SetScript("OnClick", onClick)
     return button
+end
+-- Keep navigation visually distinct from actions. Each bar owns its native
+-- tabs so Blizzard's automatic sizing never mixes the two navigation levels.
+local function TabBar(parent, x, y, width, tabWidth)
+    local bar = CreateFrame("Frame", nil, parent)
+    bar:SetPoint("TOPLEFT", x, y)
+    bar:SetSize(width, 32)
+    bar.minTabWidth, bar.maxTabWidth, bar.tabPadding = tabWidth, tabWidth, 16
+    local line = bar:CreateTexture(nil, "BACKGROUND")
+    line:SetColorTexture(0.45, 0.36, 0.18, 0.65)
+    line:SetPoint("BOTTOMLEFT", 0, 0)
+    line:SetSize(width, 1)
+    return bar
+end
+local function SetTabSelected(tab, selected)
+    tab.selected = selected
+    if tab.nativeNavigation then
+        if selected then PanelTemplates_SelectTab(tab) else PanelTemplates_DeselectTab(tab) end
+    else
+        tab.navigationLabel:SetTextColor(selected and 1 or 0.85, selected and 1 or 0.7, selected and 1 or 0.4)
+        tab.selectionLine:SetShown(selected)
+        tab:SetEnabled(not selected)
+    end
+end
+local function NavigationTab(bar, title, index, onClick, name)
+    local tab
+    if type(PanelTemplates_SelectTab) == "function" and type(PanelTemplates_DeselectTab) == "function"
+        and type(PanelTemplates_TabResize) == "function" then
+        for _, template in ipairs({ "PanelTopTabButtonTemplate", "PanelTabButtonTemplate" }) do
+            local ok, frame = pcall(CreateFrame, "Button", name, bar, template)
+            if ok and frame then tab = frame; tab.nativeNavigation = true; break end
+        end
+    end
+    if not tab then
+        -- Older clients still get text navigation with an active underline,
+        -- rather than another row of red action buttons.
+        tab = CreateFrame("Button", name, bar)
+        tab.navigationLabel = Text(tab, title, "GameFontNormalSmall", 0, 0, bar.minTabWidth)
+        tab.navigationLabel:ClearAllPoints()
+        tab.navigationLabel:SetPoint("CENTER", tab, "CENTER", 0, -2)
+        tab.navigationLabel:SetJustifyH("CENTER")
+        tab.selectionLine = tab:CreateTexture(nil, "ARTWORK")
+        tab.selectionLine:SetColorTexture(1, 0.82, 0, 1)
+        tab.selectionLine:SetPoint("BOTTOMLEFT", 4, 0)
+        tab.selectionLine:SetSize(bar.minTabWidth - 8, 2)
+    end
+    tab:SetID(index)
+    tab:SetSize(bar.minTabWidth, 32)
+    tab:SetPoint("TOPLEFT", (index - 1) * (bar.minTabWidth + 8), 0)
+    tab:SetText(title)
+    if tab.nativeNavigation then PanelTemplates_TabResize(tab, bar.tabPadding, bar.minTabWidth) end
+    tab:SetScript("OnClick", function(self)
+        if self.selected then return end
+        if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
+        onClick()
+    end)
+    return tab
 end
 local function Input(parent, name, width, x, y)
     local input = CreateFrame("EditBox", name, parent)
@@ -266,7 +328,101 @@ local function OpenNickname(guid)
     nicknameEditor:Show()
     nicknameEditor.input:SetFocus()
 end
+local function AgeLabel(stamp)
+    local age = math.max(0, ns.Recent.Now() - stamp)
+    if age < 60 then return "just now" end
+    if age < 3600 then return math.floor(age / 60) .. " min ago" end
+    if age < 86400 then return math.floor(age / 3600) .. " hr ago" end
+    local days = math.floor(age / 86400)
+    return days .. (days == 1 and " day ago" or " days ago")
+end
+local function RefreshRecent()
+    local query = (search:GetText() or ""):lower()
+    if not recentSnapshot or recentSnapshot.generation ~= ns.Recent.generation then
+        recentSnapshot, recentNeedsRefresh = ns.Recent.List(""), false
+        ns.Recent.ConsumeDirty()
+    end
+    local lists, y, rowIndex = { group = {}, nearby = {} }, 0, 0
+    for _, kind in ipairs({ "group", "nearby" }) do
+        for _, person in ipairs(recentSnapshot[kind]) do
+            if not ns.db.known[person.guid] and (query == "" or person.name:lower():find(query, 1, true)
+                or (person.rpName and person.rpName:lower():find(query, 1, true))) then
+                lists[kind][#lists[kind] + 1] = person
+            end
+        end
+    end
+    local count = #lists.group + #lists.nearby
+    panel.count:SetText(count .. (count == 1 and " recent player" or " recent players"))
+    for index, kind in ipairs({ "group", "nearby" }) do
+        local header = recentHeaders[index]
+        if not header then
+            header = Text(panel.listContent, "", "GameFontNormal", 4, 0, 540)
+            recentHeaders[index] = header
+        end
+        if #lists[kind] > 0 then
+            header:ClearAllPoints(); header:SetPoint("TOPLEFT", 4, -y)
+            header:SetText((kind == "group" and "Group members" or "Nearby") .. " (" .. #lists[kind] .. "/50)")
+            header:Show()
+            y = y + 26
+            for _, person in ipairs(lists[kind]) do
+                rowIndex = rowIndex + 1
+                local row = recentRows[rowIndex]
+                if not row then
+                    row = CreateFrame("Frame", nil, panel.listContent)
+                    row:SetSize(592, 52)
+                    Background(row, 0.08, 0.08, 0.08, 0.65)
+                    row.label = Text(row, "", nil, 10, -8, 438)
+                    row.detail = Text(row, "", "GameFontDisableSmall", 10, -29, 438)
+                    row.label:SetWordWrap(false)
+                    row.detail:SetWordWrap(false)
+                    Button(row, "Meet", 110, 466, -13, function()
+                        if row:IsVisible() then ns.Recent.Meet(row.guid, row.person, row.generation) end
+                    end)
+                    recentRows[rowIndex] = row
+                end
+                row.guid, row.person, row.generation = person.guid, person, recentSnapshot.generation
+                row:ClearAllPoints(); row:SetPoint("TOPLEFT", 0, -y)
+                row.label:SetText(person.rpName or person.name)
+                local source = person.source == "party" and "Party" or (person.source == "raid" and "Raid" or "Nearby")
+                local gameName = person.rpName and person.rpName ~= person.name and (person.name .. " · ") or ""
+                row.detail:SetText(gameName .. source .. " · " .. AgeLabel(person.lastSeen))
+                row:Show()
+                y = y + 58
+            end
+            y = y + 12
+        else header:Hide() end
+    end
+    panel.empty:SetText(query ~= "" and "No recent players match your search." or "No recent players yet. Group with someone or encounter their nameplate, then find them here.")
+    panel.empty:SetShown(count == 0)
+    panel.listContent:SetHeight(math.max(60, y))
+    pages.Acquaintances.content:SetHeight(PEOPLE_LIST_TOP + math.max(60, y) + 16)
+end
+local function RecentSubtitle()
+    return recentNeedsRefresh and "History updated. Refresh list when you're ready to see the latest encounters."
+        or "50 group members + 50 nearby players. This list stays still until you refresh."
+end
+function ns.RefreshRecentPlayers(changed)
+    if changed and not recentNeedsRefresh then
+        recentNeedsRefresh = true
+        if panel and panel:IsVisible() and selectedTab == "Acquaintances" and peopleView == "recent" then
+            peopleSubtitle:SetText(RecentSubtitle())
+        end
+    end
+end
 local function RefreshPeople()
+    local isRecent = peopleView == "recent"
+    peopleTitle:SetText(isRecent and "Recent players" or "Your acquaintances")
+    panel.searchCaption:SetText(isRecent and "Search game or roleplay names" or "Search names or nicknames")
+    peopleSubtitle:SetText(isRecent and RecentSubtitle() or "Saved separately for this character.")
+    panel.exportButton:SetShown(not isRecent)
+    panel.importButton:SetShown(not isRecent)
+    panel.clearHistory:SetShown(isRecent)
+    panel.refreshRecent:SetShown(isRecent)
+    for value, tab in pairs(peopleChoices) do SetTabSelected(tab, value == peopleView) end
+    for _, row in ipairs(rows) do row:Hide() end
+    for _, row in ipairs(recentRows) do row:Hide() end
+    for _, header in ipairs(recentHeaders) do header:Hide() end
+    if isRecent then RefreshRecent(); peopleSubtitle:SetText(RecentSubtitle()); return end
     local query = (search:GetText() or ""):lower()
     local people, total = {}, 0
     for guid, record in pairs(ns.db.known) do
@@ -301,7 +457,7 @@ local function RefreshPeople()
     panel.empty:SetShown(#people == 0)
     local listHeight = math.max(46, #people * 46)
     panel.listContent:SetHeight(listHeight)
-    pages.Acquaintances.content:SetHeight(142 + listHeight + 16)
+    pages.Acquaintances.content:SetHeight(PEOPLE_LIST_TOP + listHeight + 16)
     if nicknameEditor.guid and not ns.db.known[nicknameEditor.guid] then
         nicknameEditor.guid = nil
         nicknameEditor:Hide()
@@ -333,9 +489,11 @@ function ns.RefreshSettings()
     refreshing = false
 end
 function ns.FinishSettingsInput()
+    recentSnapshot = nil
     for _, input in pairs(values) do input:ClearFocus() end
     if search then search:ClearFocus() end
     if transferDialog then transferDialog:Hide() end
+    if recentClearDialog then recentClearDialog:Hide() end
     if nicknameEditor then nicknameEditor.input:ClearFocus(); nicknameEditor:Hide() end
 end
 local function SelectTab(name)
@@ -343,7 +501,7 @@ local function SelectTab(name)
     ns.FinishSettingsInput()
     selectedTab = name
     for key, page in pairs(pages) do page:SetShown(key == name) end
-    for key, tab in pairs(tabs) do tab:SetText(key == name and ("|cffffd100" .. key .. "|r") or key) end
+    for key, tab in pairs(tabs) do SetTabSelected(tab, key == name) end
     ns.RefreshSettings()
 end
 local function Page(name, height)
@@ -383,11 +541,11 @@ function ns.CreateSettings()
     Text(panel, "Make familiar faces stand out.", nil, 16, -48, 600)
     Checkbox(panel, "enabled", "Enable Acquainted", 426, -12, 180,
         "Switch off to restore your original name and nameplate settings. Your acquaintances and preferences are kept.")
-    for index, name in ipairs({ "Appearance", "Recognition", "Acquaintances" }) do
+    local mainTabs = TabBar(panel, 16, -80, 604, 144)
+    for index, name in ipairs({ "Appearance", "Recognition", "Acquaintances", "Help" }) do
         local tabName = name
-        tabs[name] = Button(panel, name, 154, 16 + (index - 1) * 164, -88, function() SelectTab(tabName) end, "Acquainted_" .. name .. "Tab")
+        tabs[name] = NavigationTab(mainTabs, name, index, function() SelectTab(tabName) end, "Acquainted_" .. name .. "Tab")
     end
-    tabs.Help = Button(panel, "Help", 94, 526, -88, function() SelectTab("Help") end, "Acquainted_HelpTab")
     panel.status = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     panel.status:SetPoint("BOTTOMLEFT", 16, 16)
     local appearance = Page("Appearance", 778)
@@ -430,10 +588,24 @@ function ns.CreateSettings()
         advancedButton:SetText(shown and "− Advanced" or "+ Advanced")
     end, "Acquainted_AdvancedButton")
     local people = Page("Acquaintances", 204)
-    Text(people, "Your acquaintances", "GameFontNormalLarge", 16, -12, 290)
-    Text(people, "Saved separately for this character.", "GameFontDisableSmall", 16, -40, 600)
-    Text(people, "Search names or nicknames", nil, 16, -78, 300)
-    search = Input(people, "Acquainted_Search", 302, 22, -102)
+    peopleTitle = Text(people, "Your acquaintances", "GameFontNormalLarge", 16, -12, 290)
+    peopleSubtitle = Text(people, "Saved separately for this character.", "GameFontDisableSmall", 16, -40, 600)
+    local peopleTabs = TabBar(people, 16, -64, 592, 112)
+    for index, value in ipairs({ "saved", "recent" }) do
+        local view = value
+        peopleChoices[view] = NavigationTab(peopleTabs, view == "saved" and "Saved" or "Recent", index, function()
+            ns.FinishSettingsInput()
+            peopleView = view
+            panel.peopleScroll:SetVerticalScroll(0)
+            search:SetText("")
+            ns.RefreshSettings()
+        end, view == "saved" and "Acquainted_SavedPlayers" or "Acquainted_RecentPlayers")
+        Tooltip(peopleChoices[view], view == "saved" and "Saved acquaintances" or "Recent players",
+            view == "saved" and "People you have met and saved, with their nicknames."
+                or "Meet someone after they leave. Keeps your latest 50 group members and 50 nearby players separately.")
+    end
+    panel.searchCaption = Text(people, "Search names or nicknames", nil, 16, -108, 300)
+    search = Input(people, "Acquainted_Search", 302, 22, -130)
     search:SetScript("OnTextChanged", function()
         if not refreshing then
             panel.peopleScroll:SetVerticalScroll(0)
@@ -441,10 +613,10 @@ function ns.CreateSettings()
         end
     end)
     search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-    panel.count = Text(people, "", "GameFontDisableSmall", 346, -109, 260)
+    panel.count = Text(people, "", "GameFontDisableSmall", 346, -137, 260)
     panel.peopleScroll = pages.Acquaintances
     panel.listContent = CreateFrame("Frame", "Acquainted_AcquaintanceList", people)
-    panel.listContent:SetPoint("TOPLEFT", 16, -142)
+    panel.listContent:SetPoint("TOPLEFT", 16, -PEOPLE_LIST_TOP)
     panel.listContent:SetSize(554, 46)
     panel.empty = Text(panel.listContent, "", nil, 4, -10, 540)
     transferDialog = CreateFrame("Frame", "Acquainted_TransferDialog", panel)
@@ -525,6 +697,30 @@ function ns.CreateSettings()
     end
     local exportButton = Button(people, "Export list", 132, 330, -8, function() OpenTransfer(false) end, "Acquainted_Export")
     local importButton = Button(people, "Import list", 132, 476, -8, function() OpenTransfer(true) end, "Acquainted_Import")
+    panel.exportButton, panel.importButton = exportButton, importButton
+    panel.refreshRecent = Button(people, "Refresh list", 132, 330, -8, function()
+        recentSnapshot = nil
+        panel.peopleScroll:SetVerticalScroll(0)
+        ns.RefreshSettings()
+    end, "Acquainted_RefreshRecent")
+    Tooltip(panel.refreshRecent, "Refresh list", "Show the latest encounters. The list stays still while you browse, even when players arrive or leave.")
+    panel.clearHistory = Button(people, "Clear history", 132, 476, -8, function() recentClearDialog:Show() end, "Acquainted_ClearHistory")
+    recentClearDialog = CreateFrame("Frame", "Acquainted_ClearHistoryDialog", panel)
+    recentClearDialog:SetPoint("CENTER", panel, "CENTER", 0, 0)
+    recentClearDialog:SetSize(520, 146)
+    recentClearDialog:SetFrameLevel(panel:GetFrameLevel() + 25)
+    recentClearDialog:EnableMouse(true)
+    Background(recentClearDialog, 0.06, 0.06, 0.06, 1)
+    Text(recentClearDialog, "Clear recent players?", "GameFontNormalLarge", 16, -16, 480)
+    Text(recentClearDialog, "Clears both recent lists. Your saved acquaintances and nicknames are kept.", nil, 16, -48, 480)
+    Button(recentClearDialog, "Clear history", 132, 16, -106, function()
+        ns.Recent.Clear()
+        recentClearDialog:Hide()
+        ns.RefreshSettings()
+    end, "Acquainted_ConfirmClearHistory")
+    Button(recentClearDialog, "Cancel", 108, 396, -106, function() recentClearDialog:Hide() end, "Acquainted_CancelClearHistory")
+    recentClearDialog:Hide()
+    Tooltip(panel.clearHistory, "Clear history", "Clear recent group and nearby players. Saved acquaintances are kept.")
     Tooltip(exportButton, "Export list", "Copy your manual acquaintances and nicknames to another machine.")
     Tooltip(importButton, "Import list", "Paste an exported list and preview it before merging or replacing acquaintances.")
     transferInput:SetScript("OnEscapePressed", function() transferDialog:Hide() end)

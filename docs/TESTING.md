@@ -72,3 +72,38 @@ cleanup deferred until combat ends; resuming IC must also wait if necessary.
 Reload while OOC and check that no custom names or temporary overrides activate.
 Acquaintances and nicknames must survive each transition. Disable the option,
 and repeat without TRP3 installed: normal Acquainted displays should work.
+
+## Recent players
+
+- Join a party, leave/disband quickly, and find its members under Acquaintances →
+  Recent players. Repeat in a raid and with friendly nameplates disabled or
+  restricted in an instance. Meet someone after they leave or log out; their
+  game name should appear in Saved acquaintances, with normal met styling when
+  encountered again. RP names should help identify them without hiding game names.
+- Gather over 50 nearby players in a crowded area. Check that only the newest 50
+  remain nearby and that former group members remain in their separate history.
+  A nearby person who joins your group should move to Group members without
+  appearing twice. Already saved acquaintances should not consume history slots.
+- Search both game and RP names, clear the search, and switch between saved and
+  recent views. Group members should appear first; only one scrollbar should
+  appear when the content needs it. Long RP names should not overlap other rows.
+- Cancel Clear history, then confirm it. Cancellation preserves both lists;
+  confirmation empties both but preserves acquaintances and nicknames. Reload
+  before clearing to verify histories persist separately for each character.
+- Disable Acquainted or switch OOC in IC-only mode: no new encounters should be
+  captured. Re-enable or switch IC: current group members should be collected.
+  Check CPU usage in a busy area with settings closed and with Recent open;
+  the displayed rows should stay still as players arrive, leave, or change order.
+  Refresh list should show new encounters; searching should keep the same snapshot.
+  Keep a row open while over 50 newcomers arrive: its Meet button should still
+  meet the displayed player, even if they have left the stored recent history.
+
+## Navigation and readability
+
+Check that Appearance, Recognition, Acquaintances, and Help use native tabs,
+with a clearly selected tab. Acquaintances should have a separate, smaller
+Saved / Recent tab bar. Selecting one level must not alter the other. Clicking
+the selected tab should keep search text, scroll position, and Recent rows intact.
+Confirm that tab labels fit after reopening settings or changing UI scale.
+Red buttons should remain for actions such as Meet, Refresh, and Clear history.
+The main panel should use the standard WoW settings background.

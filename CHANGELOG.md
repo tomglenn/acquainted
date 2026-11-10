@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.1
+
+- Replace red navigation buttons with native WoW tabs for Appearance, Recognition, Acquaintances, and Help, plus smaller Saved/Recent tabs. Active tabs have a distinct selected state and do not reload their view when clicked again.
+- Tighten acquaintance search/list spacing, add view descriptions on hover, and keep red buttons for actions such as Meet, Refresh, and Clear history. Preserve the stable Recent snapshot until explicit refresh or reopening.
+
+## 0.8.0
+
+- Add a searchable Recent players view under Acquaintances, with separate histories of 50 group members and 50 nearby players. Nearby traffic never evicts group members, and players appear only once.
+- Meet recent players after they leave, go offline, or your party disbands. Store character IDs, game names, available RP names, encounter type, and timestamps per character across reloads. Meeting moves the player into permanent acquaintances.
+- Show group members first, with RP/game names, encounter details, elapsed time, and a Meet button. Keep saved acquaintances and export/import in their own view; clearing recent history asks for confirmation and preserves acquaintances.
+- Capture encounters from player/nameplate and roster events, retry incomplete identities briefly, cap storage, and keep the displayed list stable until Refresh list is clicked or the view is reopened. Respect the addon enable switch and optional IC-only mode.
+
 ## 0.7.5
 
 - Add an optional Only active while IC in Total RP 3 setting under Recognition, off by default. Pause displays and release temporary nameplate settings while OOC, then resume automatically while IC. Without TRP3, Acquainted continues normally.

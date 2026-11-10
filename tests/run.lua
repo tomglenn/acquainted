@@ -12,6 +12,8 @@ end
 local function world(saved, runtime)
     local w = { pending = {}, frames = {}, plates = {}, writes = 0, depth = 0, messages = {}, hooks = {} }
     local env = setmetatable({}, { __index = _G })
+    w.now = 1700000000
+    env.GetServerTime = function() return w.now end
     env._G = env
     w.env, w.ns = env, {}
     w.units = {
@@ -74,6 +76,10 @@ local function world(saved, runtime)
         end
         function f:SetPoint(...) self.point = { ... } end
         function f:ClearAllPoints() self.point = nil end
+        function f:SetID(v) self.id = v end
+        function f:GetID() return self.id end
+        function f:Enable() self.enabled = true end
+        function f:Disable() self.enabled = false end
         function f:SetWidth(v) self.width = v end
         function f:SetHeight(v)
             local changed = self.height ~= v
@@ -85,6 +91,7 @@ local function world(saved, runtime)
         function f:SetText(v)
             local changed = self.text ~= v
             self.text = v
+            if self.Text then self.Text:SetText(v) end
             if changed and self.scripts.OnTextChanged then self.scripts.OnTextChanged(self, false) end
         end
         function f:GetText() return self.text or '' end
@@ -112,6 +119,7 @@ local function world(saved, runtime)
         function f:CreateTexture() return widget('Texture', nil, self) end
         function f:SetJustifyH(v) self.justify = v end
         function f:SetJustifyV(v) self.justifyV = v end
+        function f:SetWordWrap(v) self.wordWrap = v end
         function f:SetTextInsets(...) self.textInsets = { ... } end
         function f:SetMultiLine(value) self.multiline = value end
         function f:SetFont(path, size, flags) self.font = { path, size, flags }; return true end
@@ -129,6 +137,7 @@ local function world(saved, runtime)
         end
         function f:Show() self.shown = true end
         function f:IsShown() return self.shown end
+        function f:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
         function f:SetShown(v) self.shown = v end
         function f:SetChecked(v) self.checked = v end
         function f:GetChecked() return self.checked end
@@ -152,10 +161,33 @@ local function world(saved, runtime)
         w.frames[#w.frames + 1] = f
         if name then env[name] = f end
         if template == 'UIPanelScrollFrameTemplate' then f.ScrollBar = widget('Slider', nil, f) end
+        if template == 'PanelTopTabButtonTemplate' or template == 'PanelTabButtonTemplate' then
+            f.Text = widget('FontString', nil, f)
+            f.isTopTab = template == 'PanelTopTabButtonTemplate'
+            for _, region in ipairs({ 'Left', 'Middle', 'Right', 'LeftActive', 'MiddleActive', 'RightActive' }) do
+                f[region] = widget('Texture', nil, f)
+            end
+            f.scripts.OnShow = function(self)
+                env.PanelTemplates_TabResize(self, parent.tabPadding, nil, parent.minTabWidth, parent.maxTabWidth)
+            end
+        end
         if template == 'OptionsSliderTemplate' then
             f.Text, f.Low, f.High = widget('FontString'), widget('FontString'), widget('FontString')
         end
         return f
+    end
+    env.PanelTemplates_TabResize = function(tab, padding, width, minimum, maximum)
+        tab:SetWidth(width or math.max(minimum or 0, math.min(maximum or math.huge, #tab:GetText() * 7 + 24 + (padding or 0))))
+    end
+    env.PanelTemplates_SelectTab = function(tab)
+        tab:Disable()
+        for _, region in ipairs({ 'Left', 'Middle', 'Right' }) do tab[region]:Hide() end
+        for _, region in ipairs({ 'LeftActive', 'MiddleActive', 'RightActive' }) do tab[region]:Show() end
+    end
+    env.PanelTemplates_DeselectTab = function(tab)
+        tab:Enable()
+        for _, region in ipairs({ 'Left', 'Middle', 'Right' }) do tab[region]:Show() end
+        for _, region in ipairs({ 'LeftActive', 'MiddleActive', 'RightActive' }) do tab[region]:Hide() end
     end
     env.CreateFrame = widget
     env.ColorPickerFrame = widget('ColorPicker')
@@ -1916,6 +1948,290 @@ check(not optOut.ns.db.options.onlyWhileIC and optOut:label(optOutPlate).shown, 
 optOut.env.AddOn_TotalRP3.Player.GetCurrentUser = function() error('must not read status when disabled') end
 optOut:tick()
 check(optOut:label(optOutPlate).shown, 'disabled IC-only option does not consult TRP3 status')
+
+local function TestRecentPlayers()
+-- Recent encounters are bounded, kept by GUID, and independent of rendering.
+local function countRecords(bucket)
+    local count = 0
+    for _ in pairs(bucket) do count = count + 1 end
+    return count
+end
+local function recentPerson(testWorld, token, index, inParty)
+    testWorld.units[token] = { guid = string.format('Player-1-%X', 1000 + index), first = 'Person', surname = tostring(index), player = true, friend = true, party = inParty }
+    return testWorld.units[token].guid
+end
+local history = world()
+local historyPlate = history:plate('stranger')
+history:load(); history:flush()
+check(history.ns.db.recent.nearby['Player-1-A'].name == 'Aster Moon', 'existing nearby plates are captured on activation')
+local historyWrites = history.writes
+history.ns.Recent.Clear()
+for index = 1, 55 do
+    history.now = history.now + 1
+    recentPerson(history, 'party1', index, true)
+    history:fire('GROUP_ROSTER_UPDATE')
+end
+check(countRecords(history.ns.db.recent.group) == 50, 'group history retains at most 50 players')
+check(not history.ns.db.recent.group[string.format('Player-1-%X', 1001)] and history.ns.db.recent.group[string.format('Player-1-%X', 1055)], 'new group members evict the oldest group member')
+local protectedGroup = copy(history.ns.db.recent.group)
+for index = 101, 180 do
+    history.now = history.now + 1
+    recentPerson(history, 'crowd', index)
+    history:fire('UNIT_NAME_UPDATE', 'crowd')
+end
+check(countRecords(history.ns.db.recent.group) == 50 and countRecords(history.ns.db.recent.nearby) == 50, 'crowded nearby encounters cannot consume group capacity')
+for guid, record in pairs(protectedGroup) do
+    check(history.ns.db.recent.group[guid].lastSeen == record.lastSeen, 'crowds preserve every group history record')
+end
+check(not history.ns.db.recent.nearby[string.format('Player-1-%X', 1101)] and history.ns.db.recent.nearby[string.format('Player-1-%X', 1180)], 'nearby evicts its own least recent encounters')
+history:flush()
+check(history.writes == historyWrites, 'recording encounters never writes nameplate settings')
+
+local nearbyGuid = recentPerson(history, 'crowd', 160)
+history.now = history.now + 1; history.ns.Recent.CaptureNearby('crowd')
+local list = history.ns.Recent.List('PERSON 160')
+check(#list.nearby == 1 and list.nearby[1].guid == nearbyGuid, 'recent search uses case-insensitive literal game names')
+check(history.ns.Recent.List('').nearby[1].guid == nearbyGuid, 'repeat encounter refreshes recency without adding a second record')
+history.units.party1 = history.units.crowd; history.units.party1.party = true
+history:fire('GROUP_ROSTER_UPDATE'); history:flush()
+check(history.ns.db.recent.group[nearbyGuid] and not history.ns.db.recent.nearby[nearbyGuid], 'joining a group promotes nearby entries without duplicates')
+local formerGroupStamp = history.ns.db.recent.group[nearbyGuid].lastSeen
+history.units.crowd.party = false; history.units.party1 = nil
+history.now = history.now + 10; history:fire('GROUP_ROSTER_UPDATE'); history.ns.Recent.CaptureNearby('crowd')
+check(history.ns.db.recent.group[nearbyGuid].lastSeen == formerGroupStamp and not history.ns.db.recent.nearby[nearbyGuid], 'nearby sightings do not reorder former group members')
+history.units.crowd = nil
+check(history.ns.Recent.Meet(nearbyGuid) and history.ns.db.known[nearbyGuid].name == 'Person 160', 'Meet works after a player leaves and their unit disappears')
+check(not history.ns.db.recent.group[nearbyGuid] and not history.ns.db.recent.nearby[nearbyGuid], 'meeting frees both history slots')
+check(not history.ns.Recent.Meet(nearbyGuid), 'stale recent Meet cannot overwrite an existing acquaintance')
+history.ns.SetNickname(nearbyGuid, 'An old friend')
+history.ns.Recent.Meet(nearbyGuid)
+check(history.ns.db.known[nearbyGuid].nickname == 'An old friend', 'stale Meet preserves nicknames')
+
+local reloadedHistory = world(copy(history.ns.db))
+reloadedHistory.now = history.now
+reloadedHistory.units.stranger = nil
+reloadedHistory:load(); reloadedHistory:flush()
+check(countRecords(reloadedHistory.ns.db.recent.group) == 49 and countRecords(reloadedHistory.ns.db.recent.nearby) == 49, 'separate histories survive reload')
+check(reloadedHistory.ns.db.known[nearbyGuid].nickname == 'An old friend', 'reload preserves permanent acquaintances independently')
+reloadedHistory.ns.Recent.Clear()
+check(countRecords(reloadedHistory.ns.db.recent.group) == 0 and countRecords(reloadedHistory.ns.db.recent.nearby) == 0 and reloadedHistory.ns.db.known[nearbyGuid], 'clear history leaves permanent acquaintances untouched')
+
+local delayedRecent = world()
+delayedRecent:load(); delayedRecent:flush()
+local delayedGuid = recentPerson(delayedRecent, 'party1', 501, true)
+delayedRecent.units.party1.first = nil
+delayedRecent:fire('GROUP_ROSTER_UPDATE')
+check(not delayedRecent.ns.db.recent.group[delayedGuid], 'missing names are not stored as incomplete encounters')
+delayedRecent.units.party1.first = 'Later'; delayedRecent:tick()
+check(delayedRecent.ns.db.recent.group[delayedGuid].name == 'Later 501', 'pending roster identity retries succeed without another roster event')
+local reusedGuid = recentPerson(delayedRecent, 'party1', 502, true)
+delayedRecent.units.party1.first = nil; delayedRecent:fire('GROUP_ROSTER_UPDATE')
+recentPerson(delayedRecent, 'party1', 503, true); delayedRecent:tick()
+check(not delayedRecent.ns.db.recent.group[reusedGuid], 'pending captures do not associate reused unit tokens with the previous player')
+local absentGuid = recentPerson(delayedRecent, 'party1', 504, true)
+delayedRecent.units.party1.first = nil; delayedRecent:fire('GROUP_ROSTER_UPDATE')
+for _ = 1, 42 do delayedRecent:tick() end
+delayedRecent.units.party1.first = 'TooLate'; delayedRecent:tick()
+check(not delayedRecent.ns.db.recent.group[absentGuid], 'missing identities expire rather than retrying forever')
+delayedRecent.units.raid1 = delayedRecent.units.party1; delayedRecent.units.party1 = nil; delayedRecent.raid = true
+delayedRecent:fire('GROUP_ROSTER_UPDATE')
+check(delayedRecent.ns.db.recent.group[absentGuid].source == 'raid', 'raid roster members are captured without a nameplate')
+
+local restrictedRecent = world({ options = { enabled = false } })
+restrictedRecent:load(); restrictedRecent:flush()
+recentPerson(restrictedRecent, 'party1', 601, true)
+restrictedRecent:fire('GROUP_ROSTER_UPDATE'); restrictedRecent:fire('UNIT_NAME_UPDATE', 'party1'); restrictedRecent:flush()
+check(countRecords(restrictedRecent.ns.db.recent.group) == 0, 'disabled Acquainted does not collect new history')
+restrictedRecent:command('on')
+check(countRecords(restrictedRecent.ns.db.recent.group) == 1, 'enabling captures current roster even without a new roster event')
+restrictedRecent.ns.Recent.Clear()
+restrictedRecent.units.secret = { guid = { secret = true }, first = 'Secret', player = true, friend = true }
+restrictedRecent.ns.Recent.CaptureNearby('secret')
+restrictedRecent.ns.Recent.CaptureNearby('player'); restrictedRecent.ns.Recent.CaptureNearby('npc')
+check(countRecords(restrictedRecent.ns.db.recent.nearby) == 0, 'restricted identities, self and NPCs never enter history')
+setTRPStatus(restrictedRecent, false); restrictedRecent:option('onlyWhileIC', true)
+restrictedRecent:fire('GROUP_ROSTER_UPDATE'); restrictedRecent:flush()
+check(countRecords(restrictedRecent.ns.db.recent.group) == 0, 'OOC pause respects IC-only history capture')
+
+local recentUI = world()
+recentUI:load(); recentUI:flush()
+recentUI.ns.Recent.Clear()
+local uiGroup = recentPerson(recentUI, 'party1', 701, true)
+recentUI.env.AddOn_TotalRP3 = { Player = { CreateFromUnit = function(token)
+    return { GetRoleplayingName = function() return token == 'party1' and '|cff00ff00The Scholar|r' or 'A passerby' end }
+end } }
+recentUI:fire('GROUP_ROSTER_UPDATE')
+local uiNear = recentPerson(recentUI, 'nearby', 702)
+recentUI:fire('UNIT_NAME_UPDATE', 'nearby'); recentUI:flush()
+recentUI.units.party1, recentUI.units.nearby = nil, nil
+local rui = recentUI.env
+click(recentUI, rui.Acquainted_AcquaintancesTab); click(recentUI, rui.Acquainted_RecentPlayers)
+check(not rui.Acquainted_Export.shown and not rui.Acquainted_Import.shown and rui.Acquainted_ClearHistory.shown, 'recent view uses clear history instead of export/import actions')
+local function recentVisibleRows()
+    local result = {}
+    for _, frame in ipairs(recentUI.frames) do
+        if frame.parent == rui.Acquainted_AcquaintanceList and frame.kind == 'Frame' and frame.shown then result[#result + 1] = frame end
+    end
+    return result
+end
+local recentMatches = recentVisibleRows()
+check(#recentMatches == 2 and recentMatches[1].guid == uiGroup and recentMatches[2].guid == uiNear, 'recent UI places group members before nearby encounters')
+check(recentMatches[1].label.text == 'The Scholar' and recentMatches[1].detail.text:find('Person 701', 1, true), 'recent rows show RP names with game identity and encounter details')
+check(recentMatches[1].label.wordWrap == false and recentMatches[1].detail.wordWrap == false, 'long RP names cannot wrap over adjacent rows')
+rui.Acquainted_Search:SetText('scholar')
+check(#recentVisibleRows() == 1 and recentVisibleRows()[1].guid == uiGroup, 'recent UI searches RP names')
+local clickedRecentMeet
+for _, frame in ipairs(recentUI.frames) do
+    if frame.parent == recentVisibleRows()[1] and frame.text == 'Meet' then clickedRecentMeet = frame end
+end
+check(clickedRecentMeet ~= nil, 'recent player rows offer a Meet action')
+click(recentUI, clickedRecentMeet)
+check(recentUI.ns.db.known[uiGroup] and #recentVisibleRows() == 0, 'recent Meet immediately updates the filtered list after the group disbands')
+rui.Acquainted_Search:SetText('')
+click(recentUI, rui.Acquainted_ClearHistory)
+check(rui.Acquainted_ClearHistoryDialog.shown, 'clearing history first opens a confirmation')
+click(recentUI, rui.Acquainted_CancelClearHistory)
+check(not rui.Acquainted_ClearHistoryDialog.shown and recentUI.ns.db.recent.nearby[uiNear], 'cancel preserves history')
+click(recentUI, rui.Acquainted_ClearHistory); click(recentUI, rui.Acquainted_ConfirmClearHistory)
+check(#recentVisibleRows() == 0 and recentUI.ns.db.known[uiGroup], 'confirmed clear empties history without forgetting acquaintances')
+click(recentUI, clickedRecentMeet)
+check(recentUI.ns.db.known[uiGroup].name == 'Person 701', 'stale row action after clear cannot mutate an acquaintance')
+click(recentUI, rui.Acquainted_SavedPlayers)
+check(rui.Acquainted_Export.shown and rui.Acquainted_Import.shown and not rui.Acquainted_ClearHistory.shown, 'saved view retains its existing export/import controls')
+check(#recentVisibleRows() == 1 and recentVisibleRows()[1].guid == uiGroup, 'recently met player appears in saved acquaintances')
+
+-- Recent rows stay pinned until the user explicitly refreshes or reopens them.
+click(recentUI, rui.Acquainted_RecentPlayers)
+local listCalls, realRecentList = 0, recentUI.ns.Recent.List
+recentUI.ns.Recent.List = function(query) listCalls = listCalls + 1; return realRecentList(query) end
+recentUI.category.frame:Hide()
+recentPerson(recentUI, 'newcomer', 801)
+recentUI:fire('UNIT_NAME_UPDATE', 'newcomer'); recentUI.now = recentUI.now + 1; recentUI:flush()
+check(listCalls == 0, 'hidden settings do not rebuild recent lists when encounters arrive')
+recentUI.category.frame:Show(); recentUI.ns.RefreshSettings(); listCalls = 0
+for index = 802, 810 do
+    recentPerson(recentUI, 'newcomer', index)
+    recentUI:fire('UNIT_NAME_UPDATE', 'newcomer'); recentUI:flush()
+end
+check(listCalls == 0, 'same-second arrivals do not repeatedly rebuild the open recent list')
+recentUI.now = recentUI.now + 1; recentUI:tick()
+check(listCalls == 0, 'new encounters cannot reorder rows under a visible Meet button')
+recentUI.now = recentUI.now + 60; recentUI:tick()
+check(listCalls == 0, 'idle timers cannot replace the displayed recent list')
+rui.Acquainted_Search:SetText('Person 810')
+check(#recentVisibleRows() == 0 and listCalls == 0, 'searching uses the same pinned list rather than loading new encounters')
+rui.Acquainted_Search:SetText('')
+click(recentUI, rui.Acquainted_RefreshRecent)
+check(listCalls == 1 and #recentVisibleRows() == 10, 'Refresh list explicitly loads all new encounters')
+local pinnedGuid = string.format('Player-1-%X', 1801)
+local pinnedButton
+for _, row in ipairs(recentVisibleRows()) do
+    if row.guid == pinnedGuid then
+        for _, frame in ipairs(recentUI.frames) do
+            if frame.parent == row and frame.text == 'Meet' then pinnedButton = frame end
+        end
+    end
+end
+check(pinnedButton ~= nil, 'snapshot contains a Meet button for its oldest nearby encounter')
+for index = 811, 880 do
+    recentPerson(recentUI, 'newcomer', index)
+    recentUI.now = recentUI.now + 1
+    recentUI:fire('UNIT_NAME_UPDATE', 'newcomer'); recentUI:flush()
+end
+check(not recentUI.ns.db.recent.nearby[pinnedGuid] and #recentVisibleRows() == 10 and listCalls == 1, 'even history eviction cannot replace the visible snapshot')
+click(recentUI, pinnedButton)
+check(recentUI.ns.db.known[pinnedGuid] and recentUI.ns.db.known[pinnedGuid].name == 'Person 801', 'pinned Meet still works after a crowd evicts its stored encounter')
+local exportRecentOnly = recentUI.ns.ExportPeople()
+check(not exportRecentOnly:find('Person 810', 1, true), 'recent history is excluded from acquaintance exports')
+
+local rapidGroup = world()
+rapidGroup:load(); rapidGroup:flush()
+local rapidGuid = recentPerson(rapidGroup, 'party1', 901, true)
+rapidGroup:fire('GROUP_ROSTER_UPDATE')
+rapidGroup.units.party1 = nil; rapidGroup:fire('GROUP_ROSTER_UPDATE'); rapidGroup:flush()
+check(rapidGroup.ns.db.recent.group[rapidGuid] ~= nil, 'roster identities are captured before a same-frame disband can invalidate tokens')
+rapidGroup.combat = true
+recentPerson(rapidGroup, 'party1', 902, true)
+local rapidWrites = rapidGroup.writes
+rapidGroup:fire('GROUP_ROSTER_UPDATE'); rapidGroup:flush()
+check(rapidGroup.ns.db.recent.group[string.format('Player-1-%X', 1902)] and rapidGroup.writes == rapidWrites, 'combat roster history never changes protected settings')
+
+local importedHistory = world()
+importedHistory:load(); importedHistory:flush()
+check(importedHistory.ns.db.recent.nearby['Player-1-A'], 'nearby player exists before import')
+check(importedHistory.ns.ImportPeople('ACQUAINTED:1\nPlayer-1-A\tAster Moon\t', false, false), 'import can permanently meet a recent player')
+check(not importedHistory.ns.db.recent.nearby['Player-1-A'], 'import frees recent history slots for newly saved acquaintances')
+
+local badHistory = world({ recent = { group = {
+    ['Player-1-AAA'] = { name = 'Good', lastSeen = 1699999999, order = 1 },
+    ['Player-1-AAB'] = { name = 'Future', lastSeen = math.huge, order = 2 },
+    ['Player-1-AAC'] = { name = 42, lastSeen = 1699999999, order = 3 },
+    ['Player-1-AAD'] = { name = 'No time' },
+}, nearby = {
+    ['Player-1-AAA'] = { name = 'Duplicate', lastSeen = 1699999999, order = 1 },
+    ['Creature-1-ABC'] = { name = 'NPC', lastSeen = 1699999999, order = 1 },
+} } })
+badHistory.units.stranger = nil
+badHistory:load(); badHistory:flush()
+check(countRecords(badHistory.ns.db.recent.group) == 1 and countRecords(badHistory.ns.db.recent.nearby) == 0, 'reload normalizes malformed history and removes duplicate identities')
+
+end
+TestRecentPlayers()
+
+local function TestSettingsNavigation()
+    local navigation = world()
+    navigation:load(); navigation:flush()
+    local env = navigation.env
+    local baselineWrites = navigation.writes
+    for _, key in ipairs({ 'Appearance', 'Recognition', 'Acquaintances', 'Help' }) do
+        local tab = env['Acquainted_' .. key .. 'Tab']
+        check(tab.template == 'PanelTopTabButtonTemplate' and tab:GetText() == key, 'main navigation uses native tabs with plain labels: ' .. key)
+        check(tab.selected == (key == 'Appearance'), 'native selection matches initially visible page: ' .. key)
+    end
+    check(env.Acquainted_AppearanceTab.LeftActive.shown and not env.Acquainted_AppearanceTab.enabled, 'selected native tab uses active artwork and cannot be clicked again')
+    check(not env.Acquainted_HelpTab.LeftActive.shown and env.Acquainted_HelpTab.enabled, 'unselected native tab stays available')
+    click(navigation, env.Acquainted_AcquaintancesTab)
+    check(env.Acquainted_AcquaintancesTab.LeftActive.shown and not env.Acquainted_AppearanceTab.LeftActive.shown, 'main tab changes update native artwork')
+    check(env.Acquainted_SavedPlayers:GetText() == 'Saved' and env.Acquainted_RecentPlayers:GetText() == 'Recent', 'secondary tabs use concise labels')
+    check(env.Acquainted_SavedPlayers.parent ~= env.Acquainted_AcquaintancesTab.parent and env.Acquainted_SavedPlayers.width < env.Acquainted_AcquaintancesTab.width, 'secondary tabs have their own bar and smaller size')
+    check(env.Acquainted_SavedPlayers.selected and env.Acquainted_AcquaintancesTab.selected, 'main and secondary selection coexist')
+    click(navigation, env.Acquainted_RecentPlayers)
+    check(env.Acquainted_RecentPlayers.LeftActive.shown and not env.Acquainted_SavedPlayers.LeftActive.shown, 'secondary selection uses native artwork')
+    check(env.Acquainted_RefreshRecent.template == 'UIPanelButtonTemplate' and env.Acquainted_ClearHistory.template == 'UIPanelButtonTemplate', 'actions retain ordinary buttons')
+    env.Acquainted_Search:SetText('Aster')
+    env.Acquainted_AcquaintancesPage:SetVerticalScroll(42)
+    local recentCalls, originalList = 0, navigation.ns.Recent.List
+    navigation.ns.Recent.List = function(query) recentCalls = recentCalls + 1; return originalList(query) end
+    click(navigation, env.Acquainted_RecentPlayers)
+    click(navigation, env.Acquainted_AcquaintancesTab)
+    check(env.Acquainted_Search:GetText() == 'Aster' and env.Acquainted_AcquaintancesPage:GetVerticalScroll() == 42 and recentCalls == 0, 'clicking active navigation preserves search, scroll, and pinned recent entries')
+    env.Acquainted_AcquaintancesTab.scripts.OnShow(env.Acquainted_AcquaintancesTab)
+    env.Acquainted_RecentPlayers.scripts.OnShow(env.Acquainted_RecentPlayers)
+    check(env.Acquainted_AcquaintancesTab.width == 144 and env.Acquainted_RecentPlayers.width == 112, 'native show-time sizing preserves separate tab widths')
+    click(navigation, env.Acquainted_HelpTab)
+    check(env.Acquainted_HelpTab.selected and not env.Acquainted_AcquaintancesTab.selected and not env.Acquainted_Search:HasFocus(), 'navigation to Help selects its tab and releases search focus')
+    check(navigation.writes == baselineWrites, 'native navigation never changes game settings')
+
+    local legacy = world()
+    local originalCreate = legacy.env.CreateFrame
+    legacy.env.CreateFrame = function(kind, name, parent, template)
+        if template == 'PanelTopTabButtonTemplate' then error('template unavailable') end
+        return originalCreate(kind, name, parent, template)
+    end
+    legacy:load(); legacy:flush()
+    check(legacy.env.Acquainted_AppearanceTab.template == 'PanelTabButtonTemplate' and legacy.env.Acquainted_AppearanceTab.LeftActive.shown, 'clients without top tabs can use the standard native tab template')
+    click(legacy, legacy.env.Acquainted_AcquaintancesTab)
+    click(legacy, legacy.env.Acquainted_RecentPlayers)
+    check(legacy.env.Acquainted_RecentPlayers.selected, 'standard native fallback supports secondary navigation')
+
+    local minimal = world()
+    minimal.env.PanelTemplates_SelectTab = false
+    minimal:load(); minimal:flush()
+    check(minimal.env.Acquainted_AppearanceTab.template == nil and minimal.env.Acquainted_AppearanceTab.selectionLine.shown, 'clients without native tab helpers retain text navigation with a selected underline')
+    click(minimal, minimal.env.Acquainted_HelpTab)
+    check(minimal.env.Acquainted_HelpPage.shown and minimal.env.Acquainted_HelpTab.selectionLine.shown and not minimal.env.Acquainted_AppearanceTab.selectionLine.shown, 'minimal fallback keeps settings accessible and selection visible')
+end
+TestSettingsNavigation()
 
 print('Acquainted: ' .. checks .. ' checks passed')
 return {}
