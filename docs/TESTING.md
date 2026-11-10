@@ -107,3 +107,27 @@ the selected tab should keep search text, scroll position, and Recent rows intac
 Confirm that tab labels fit after reopening settings or changing UI scale.
 Red buttons should remain for actions such as Meet, Refresh, and Clear history.
 The main panel should use the standard WoW settings background.
+
+## Recognition colours and social lists
+
+- Upgrade with the old Friends option both on and off. Confirm the split
+  Character friends, WoW Friends, and Battle.net friends preserve that choice.
+  Test the three kinds separately; a non-friend with returned account data must
+  remain unmet. Removing friends should update recognition without a reload.
+- Enable each recognition category and choose Met colour, then Custom colour.
+  Confirm the swatch appears only for Custom, preview changes immediately, and
+  picker Cancel restores the old colour. Check names, guild lines, and pets.
+  Size, position, Hide, native health/cast bars, and nameplate settings must not change.
+- Test a guildmate who is also a friend and in the group. The first enabled
+  matching custom colour in the displayed order wins. Inherited Met colours
+  must not block lower custom colours. Manual Meet and nicknames keep overrides.
+  Individual Met reset keeps overrides; Reset all appearance clears them.
+- Enable Selected communities, choose one or several joined WoW communities,
+  and wait for rosters. Verify recognition without opening or changing community
+  UI selections, no recognition for unselected communities, and correct updates
+  after member additions/removals, presence changes, leaving a community, and reload.
+  Overlapping memberships should still recognise a person after one is removed.
+  Unavailable or restricted GUIDs must not be matched by name instead.
+- Repeat community loading with Acquainted disabled and with IC-only mode OOC,
+  then activate it. Missing social APIs should leave other recognition working.
+  Keep a Recent list open during social updates: its entries should stay pinned.

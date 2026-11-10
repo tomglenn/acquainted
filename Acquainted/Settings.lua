@@ -7,6 +7,8 @@ local recentRows, recentHeaders, peopleChoices = {}, {}, {}
 local peopleTitle, peopleSubtitle, recentClearDialog
 local recentNeedsRefresh, recentSnapshot = false, nil
 local PEOPLE_LIST_TOP = 172
+local recognitionControls, communityPicker, communityStatus = {}, nil, nil
+local communityMenuRevision = -1
 local pickerSession, pickerHooked
 
 local function Text(parent, text, font, x, y, width)
@@ -247,7 +249,7 @@ local function PickColour(key)
     if not ok then ns.CloseColourPicker(); ns.Error(err) end
 end
 
-local function ColourButton(parent, key, x, y)
+local function ColourButton(parent, key, x, y, caption)
     local button = CreateFrame("Button", "Acquainted_" .. key .. "Button", parent)
     button:SetSize(28, 24)
     button:SetPoint("TOPLEFT", x, y)
@@ -256,9 +258,63 @@ local function ColourButton(parent, key, x, y)
     swatch:SetPoint("TOPLEFT", 2, -2)
     swatch:SetPoint("BOTTOMRIGHT", -2, 2)
     button:SetScript("OnClick", function() PickColour(key) end)
-    Text(parent, "Colour", nil, x + 36, y - 5, 70)
+    if caption ~= false then Text(parent, "Colour", nil, x + 36, y - 5, 70) end
     Tooltip(button, "Name colour", "Choose a colour for the name and its guild line. Changes preview immediately; Cancel restores the previous colour.")
     colours[key] = swatch
+    return button
+end
+local function RecognitionRow(parent, category, y)
+    local descriptions = {
+        guild = "Recognise members of your guild.",
+        wowFriend = "Recognise WoW Friends (title friends), separately from Battle.net and character friends.",
+        battleNetFriend = "Recognise Battle.net friends. Account information alone does not count as friendship.",
+        characterFriend = "Recognise the traditional character friends list.",
+        trpRelation = "Recognise any Total RP 3 relationship except None. Total RP 3 is optional.",
+        community = "Recognise members of the WoW communities selected below, without permanently meeting them.",
+        group = "Recognise your current party and raid. Native health bars stay under your existing nameplate settings.",
+    }
+    Checkbox(parent, category.option, category.label, 16, y, 290, descriptions[category.id])
+    local dropdown = CreateFrame("DropdownButton", "Acquainted_" .. category.id .. "ColourMode", parent, "WowStyle1DropdownTemplate")
+    dropdown:SetPoint("TOPLEFT", 346, y - 4)
+    dropdown:SetSize(150, 26)
+    dropdown:SetDefaultText("Met colour")
+    dropdown:SetupMenu(function(_, root)
+        for _, entry in ipairs({ { "met", "Met colour" }, { "custom", "Custom colour" } }) do
+            local mode, title = entry[1], entry[2]
+            root:CreateRadio(title, function() return ns.db.options[category.modeKey] == mode end,
+                function() ns.SetOption(category.modeKey, mode) end)
+        end
+    end)
+    Tooltip(dropdown, "Name colour", "Met colour follows Appearance. Custom colour overrides the name and guild line for this category. The first matching custom colour in this list wins.")
+    local swatch = ColourButton(parent, category.colourKey, 512, y - 4, false)
+    local preview = Text(parent, "Name", "GameFontNormal", 552, y - 9, 64)
+    recognitionControls[#recognitionControls + 1] = { category = category, dropdown = dropdown, swatch = swatch, preview = preview }
+end
+local function RefreshRecognition()
+    for _, control in ipairs(recognitionControls) do
+        local category, options = control.category, ns.db.options
+        control.dropdown:SetEnabled(options[category.option])
+        control.dropdown:Update()
+        control.swatch:SetShown(options[category.modeKey] == "custom")
+        control.swatch:SetEnabled(options[category.option])
+        local hex = options[category.modeKey] == "custom" and options[category.colourKey] or options.metColour
+        control.preview:SetTextColor(ns.ColourRGB(hex))
+    end
+    if communityPicker then
+        communityPicker:SetEnabled(ns.Social.available and ns.db.options.showCommunities)
+        if communityMenuRevision ~= ns.Social.communityRevision then
+            communityMenuRevision = ns.Social.communityRevision
+            communityPicker:GenerateMenu()
+        else communityPicker:Update() end
+        local count = ns.Social.selectedCount or 0
+        if not ns.Social.available then communityStatus:SetText("Community data is not available in this client yet.")
+        elseif count == 0 then communityStatus:SetText("Choose the communities whose members you recognise.")
+        elseif (ns.Social.loadingCount or 0) > 0 then communityStatus:SetText(count .. " selected · waiting for community rosters…")
+        else communityStatus:SetText(count .. (count == 1 and " community selected." or " communities selected.")) end
+    end
+end
+function ns.RefreshSocialSettings()
+    if panel and panel:IsVisible() and selectedTab == "Recognition" then RefreshRecognition() end
 end
 local function AppearanceCard(parent, known, x)
     local card = CreateFrame("Frame", nil, parent)
@@ -483,6 +539,7 @@ function ns.RefreshSettings()
     end
     if overlayCaption then overlayCaption:SetText(type(Plater) == "table" and "Plater detected · labels are added alongside its names automatically." or "For other nameplate addons. Existing names stay visible, so names may appear twice.") end
     RefreshPreviews()
+    RefreshRecognition()
     if selectedTab == "Acquaintances" then RefreshPeople() end
     ns.lastShownStatus = ns.DisplayStatus()
     panel.status:SetText(ns.lastShownStatus)
@@ -560,31 +617,44 @@ function ns.CreateSettings()
     overlayCaption = Text(appearance, "", "GameFontDisableSmall", 48, -694, 560)
     Button(appearance, "Reset all appearance", 180, 22, -730, function() ns.ResetAppearance("all") end, "Acquainted_ResetAll")
     Text(appearance, "Keeps acquaintances and recognition rules.", "GameFontDisableSmall", 216, -737, 400)
-    local recognition = Page("Recognition", 466)
+    local recognition = Page("Recognition", 702)
     Text(recognition, "Who should count as someone you know?", "GameFontNormalLarge", 16, -12, 600)
-    Text(recognition, "These people count as met automatically. Native health bars stay visible if enabled.", nil, 16, -44, 590)
-    Checkbox(recognition, "showFriends", "Friends", 16, -82, 550, "Includes character friends and Battle.net friends.")
-    Checkbox(recognition, "showGuild", "Guild members", 16, -122, 550)
-    Checkbox(recognition, "showGroup", "Party and raid members", 16, -162, 550,
-        "Use met styling for current party and raid members without saving them. Grouping keeps outsider styling active and preserves native player health bars.")
-    Checkbox(recognition, "useTRPRelations", "Total RP 3 relationships", 16, -202, 550,
-        "Recognise any TRP3 relationship except None. Total RP 3 is optional; other players do not need Acquainted.")
-    Text(recognition, "Which name should appear?", "GameFontNormal", 16, -270, 600)
-    Checkbox(recognition, "useRPNames", "Use Total RP 3 roleplay names", 16, -296, 550,
+    Text(recognition, "Use the shared Met colour or choose a custom colour. If several categories match, the first custom colour below wins.", nil, 16, -44, 590)
+    Text(recognition, "Recognise automatically", "GameFontNormal", 22, -88, 300)
+    Text(recognition, "Name colour", "GameFontNormal", 350, -88, 150)
+    Text(recognition, "Preview", "GameFontDisableSmall", 552, -88, 64)
+    for index, category in ipairs(ns.recognitionCategories) do RecognitionRow(recognition, category, -112 - (index - 1) * 40) end
+    communityPicker = CreateFrame("DropdownButton", "Acquainted_CommunityPicker", recognition, "WowStyle1DropdownTemplate")
+    communityPicker:SetPoint("TOPLEFT", 22, -400)
+    communityPicker:SetSize(240, 26)
+    communityPicker:SetDefaultText("Choose communities")
+    communityPicker:SetupMenu(function(_, root)
+        if #ns.Social.clubs == 0 then root:CreateTitle("No WoW communities available.") end
+        for _, club in ipairs(ns.Social.clubs) do
+            local key = club.key
+            root:CreateCheckbox(club.name, function() return ns.db.communities[key] == true end,
+                function() ns.SetCommunitySelected(key, not ns.db.communities[key]) end)
+        end
+    end)
+    Tooltip(communityPicker, "Recognised communities", "Choose WoW character communities to count as met. Membership is matched by character ID. Guilds use the Guild members setting above.")
+    communityStatus = Text(recognition, "", "GameFontDisableSmall", 22, -436, 590)
+    Text(recognition, "Manually meeting someone keeps their category colour. Nicknames still take priority. Health-bar colours stay unchanged.", "GameFontDisableSmall", 22, -466, 590)
+    Text(recognition, "Which name should appear?", "GameFontNormal", 16, -516, 600)
+    Checkbox(recognition, "useRPNames", "Use Total RP 3 roleplay names", 16, -542, 550,
         "Use roleplay names when available, otherwise the game name. A personal nickname takes priority.")
-    Text(recognition, "When to show names", "GameFontNormal", 16, -354, 600)
-    Checkbox(recognition, "onlyWhileIC", "Only active while IC in Total RP 3", 16, -378, 550,
+    Text(recognition, "When to show names", "GameFontNormal", 16, -594, 600)
+    Checkbox(recognition, "onlyWhileIC", "Only active while IC in Total RP 3", 16, -618, 550,
         "Pause Acquainted while you are OOC and resume when you switch IC. Restores normal names and nameplate settings while paused; combat may delay settings cleanup. Your acquaintances are kept. Has no effect without Total RP 3.")
     local advanced = CreateFrame("Frame", nil, recognition)
-    advanced:SetPoint("TOPLEFT", 0, -468); advanced:SetSize(640, 120); advanced:Hide()
+    advanced:SetPoint("TOPLEFT", 0, -704); advanced:SetSize(640, 120); advanced:Hide()
     Checkbox(advanced, "affectEnemies", "Also filter enemy players", 16, -4, 550,
         "Apply Acquainted to enemy players and their companions too. Health bars are preserved. Change this outside combat.")
     Text(advanced, "Health bars are preserved. Change this outside combat.", "GameFontDisableSmall", 48, -44, 550)
     local advancedButton
-    advancedButton = Button(recognition, "+ Advanced", 144, 16, -430, function()
+    advancedButton = Button(recognition, "+ Advanced", 144, 16, -666, function()
         local shown = not advanced:IsShown()
         advanced:SetShown(shown)
-        recognition:SetHeight(shown and 552 or 466)
+        recognition:SetHeight(shown and 788 or 702)
         advancedButton:SetText(shown and "− Advanced" or "+ Advanced")
     end, "Acquainted_AdvancedButton")
     local people = Page("Acquaintances", 204)

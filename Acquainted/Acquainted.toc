@@ -2,7 +2,7 @@
 ## Title: Acquainted
 ## Notes: Remember the people you meet. Style overhead names while preserving health bars. Total RP 3 is optional.
 ## Author: Acquainted contributors
-## Version: 0.8.1
+## Version: 0.9.0
 ## OptionalDeps: totalRP3, Plater
 ## Group: Acquainted
 ## SavedVariables: AcquaintedRuntime
@@ -12,6 +12,7 @@
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 
 Policy.lua
+Social.lua
 GameSettings.lua
 Transfer.lua
 Recent.lua

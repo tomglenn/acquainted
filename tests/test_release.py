@@ -38,6 +38,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn("Acquainted/Acquainted.toc", names)
             self.assertIn("Acquainted/Acquainted.lua", names)
             self.assertIn("Acquainted/Recent.lua", names)
+            self.assertIn("Acquainted/Social.lua", names)
             self.assertEqual((self.root / "Acquainted/Media/Unmet.tga").read_bytes(), package.read("Acquainted/Media/Unmet.tga"))
             self.assertIn("Acquainted/README.md", names)
             self.assertIn("Acquainted/CHANGELOG.md", names)
@@ -142,6 +143,17 @@ class ReleaseTests(unittest.TestCase):
         before = (destination / "Acquainted.lua").read_bytes()
         (self.root / "Acquainted" / "Recent.lua").unlink()
         with self.assertRaisesRegex(RuntimeError, "Recent.lua"):
+            install(self.root / "Acquainted", destination, backups)
+        self.assertEqual(before, (destination / "Acquainted.lua").read_bytes())
+        self.assertFalse(backups.exists())
+
+    def test_installer_requires_social_module_before_updating(self):
+        destination = self.root / "game" / "Interface" / "AddOns" / "Acquainted"
+        backups = self.root / "backups"
+        install(self.root / "Acquainted", destination, backups)
+        before = (destination / "Acquainted.lua").read_bytes()
+        (self.root / "Acquainted" / "Social.lua").unlink()
+        with self.assertRaisesRegex(RuntimeError, "Social.lua"):
             install(self.root / "Acquainted", destination, backups)
         self.assertEqual(before, (destination / "Acquainted.lua").read_bytes())
         self.assertFalse(backups.exists())

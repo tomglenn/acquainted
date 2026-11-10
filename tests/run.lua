@@ -48,7 +48,7 @@ local function world(saved, runtime)
     env.UnitInRaid = function(token) return unit(token).raid end
     env.IsGuildMember = function(guid) return w.guild == guid end
     env.C_FriendList = { IsFriend = function(guid) return w.friend == guid end }
-    env.C_BattleNet = { GetAccountInfoByGUID = function(guid) if w.bnet == guid then return {} end end }
+    env.C_BattleNet = { GetAccountInfoByGUID = function(guid) if w.bnet == guid then return { isFriend = true } end end }
     env.issecretvalue = function(value) return type(value) == 'table' and value.secret end
     env.InCombatLockdown = function() return w.combat or false end
     env.LE_PARTY_CATEGORY_INSTANCE = 2
@@ -100,6 +100,29 @@ local function world(saved, runtime)
         function f:SetAutoFocus(v) self.autoFocus = v end
         function f:SetMaxLetters(v) self.maxLetters = v end
         function f:SetEnabled(v) self.enabled = v end
+        function f:SetDefaultText(v) self.defaultText = v end
+        function f:Update()
+            local selected = {}
+            for _, item in ipairs(self.menuItems or {}) do
+                if item.isSelected and item.isSelected() then selected[#selected + 1] = item.text end
+            end
+            self:SetText(#selected > 0 and table.concat(selected, ", ") or self.defaultText or "")
+        end
+        function f:GenerateMenu()
+            self.menuItems = {}
+            local owner = self
+            local root = {}
+            function root:CreateRadio(text, selected, callback)
+                local item = { text = text, isSelected = selected, callback = callback }
+                owner.menuItems[#owner.menuItems + 1] = item
+                return item
+            end
+            root.CreateCheckbox = root.CreateRadio
+            function root:CreateTitle(text) owner.menuItems[#owner.menuItems + 1] = { text = text } end
+            self.menuGenerator(self, root)
+            self:Update()
+        end
+        function f:SetupMenu(generator) self.menuGenerator = generator; self:GenerateMenu() end
         function f:HasFocus() return self.focused or false end
         function f:SetFocus()
             self.focused = true
@@ -444,9 +467,10 @@ w.friend = 'Player-1-A'
 check(not w:label(unknown).shown, 'friends hidden until option enabled')
 w:option('showFriends', true)
 check(w:label(unknown).shown, 'friend option reveals character friends')
-w.friend, w.bnet = nil, 'Player-1-A'; w:tick()
-check(w:label(unknown).shown, 'friend option reveals Battle.net friends')
+w.friend, w.bnet = nil, 'Player-1-A'; w:option('showBattleNetFriends', true)
+check(w:label(unknown).shown, 'separate Battle.net option reveals Battle.net friends')
 w:option('showFriends', false)
+w:option('showBattleNetFriends', false)
 check(not w:label(unknown).shown, 'disabling friend option hides unknown friend')
 w.guild = 'Player-1-A'; w:option('showGuild', true)
 check(w:label(unknown).shown, 'guild option reveals guild member')
@@ -2232,6 +2256,177 @@ local function TestSettingsNavigation()
     check(minimal.env.Acquainted_HelpPage.shown and minimal.env.Acquainted_HelpTab.selectionLine.shown and not minimal.env.Acquainted_AppearanceTab.selectionLine.shown, 'minimal fallback keeps settings accessible and selection visible')
 end
 TestSettingsNavigation()
+
+local function TestRecognitionColours()
+    local guid = 'Player-1-A'
+    local function communities(testWorld)
+        testWorld.env.Enum = { ClubType = { Guild = 0, Character = 1, BattleNet = 2 }, BattleNetFriendLevel = { Title = 3, BattleTag = 2, RealID = 1 } }
+        testWorld.clubs = { { clubId = 11, clubType = 1, name = 'Wayfarers' }, { clubId = 12, clubType = 1, name = 'Adventurers' },
+            { clubId = 99, clubType = 0, name = 'The guild' }, { clubId = 98, clubType = 2, name = 'Account community' } }
+        testWorld.clubReady, testWorld.clubGuids, testWorld.focusRequests, testWorld.clubReads = true, { guid }, 0, 0
+        testWorld.env.C_Club = {
+            GetSubscribedClubs = function() testWorld.clubReads = testWorld.clubReads + 1; return testWorld.clubs end,
+            AreMembersReady = function() return testWorld.clubReady end,
+            FocusMembers = function() testWorld.focusRequests = testWorld.focusRequests + 1 end,
+            GetClubMembers = function(id) return id == 11 and testWorld.clubGuids or {} end,
+            GetMemberInfo = function(_, memberId) return { guid = memberId } end,
+        }
+    end
+    local function near(expected, label)
+        local r, g, b = tonumber(expected:sub(1,2),16)/255, tonumber(expected:sub(3,4),16)/255, tonumber(expected:sub(5,6),16)/255
+        return label.color[1] == r and label.color[2] == g and label.color[3] == b
+    end
+    for _, kind in ipairs({ 'guild', 'wowFriend', 'battleNetFriend', 'characterFriend', 'trpRelation', 'community', 'group' }) do
+        local coloured = world({ options = { hideUnmet = true }, communities = { ['11'] = true } })
+        communities(coloured)
+        if kind == 'guild' then coloured.guild = guid
+        elseif kind == 'wowFriend' or kind == 'battleNetFriend' then
+            coloured.env.C_BattleNet.GetAccountInfoByGUID = function() return { isFriend = true, friendLevel = kind == 'wowFriend' and 3 or 2 } end
+        elseif kind == 'characterFriend' then coloured.friend = guid
+        elseif kind == 'trpRelation' then
+            coloured.env.TRP3_API = { utils = { str = { getUnitID = function() return 'person' end } },
+                register = { getUnitIDProfileID = function() return 'profile' end, relation = { getRelation = function() return { id = 'FRIEND' } end } } }
+        elseif kind == 'group' then coloured.units.stranger.party = true end
+        local plate = coloured:plate('stranger')
+        coloured:load(); coloured:flush()
+        local category
+        for _, rule in ipairs(coloured.ns.recognitionCategories) do if rule.id == kind then category = rule end end
+        coloured:option(category.option, true)
+        check(coloured:label(plate).shown and near('FFD100', coloured:label(plate)), 'category inherits the existing met colour: ' .. kind)
+        local writes = coloured.writes
+        coloured:option(category.colourKey, '12ABEF'); coloured:option(category.modeKey, 'custom')
+        check(near('12ABEF', coloured:label(plate)) and near('12ABEF', plate.labels[2]), 'custom colour applies to name and guild line: ' .. kind)
+        check(coloured:label(plate).font[2] == 22 and coloured.ns.db.options.nameOffset == -40, 'category overrides leave met size and position shared: ' .. kind)
+        coloured:command('meet My nickname')
+        check(coloured:label(plate).text == 'My nickname' and near('12ABEF', coloured:label(plate)), 'manual Meet and nickname preserve category colour: ' .. kind)
+        coloured:option(category.option, false)
+        check(near('FFD100', coloured:label(plate)), 'disabled category no longer overrides a manually met person: ' .. kind)
+        check(coloured.writes == writes, 'category recognition and colours never write nameplate settings: ' .. kind)
+    end
+    local overlap = world({ options = { showWoWFriends = true, showGroup = true, showGuild = true,
+        guildColourMode = 'custom', guildColour = '00FF00', groupColourMode = 'custom', groupColour = 'FF0000',
+        wowFriendColourMode = 'custom', wowFriendColour = '0000FF' } })
+    communities(overlap); overlap.guild = guid; overlap.units.stranger.party = true
+    overlap.env.C_BattleNet.GetAccountInfoByGUID = function() return { isFriend = true, friendLevel = 3 } end
+    local overlapPlate = overlap:plate('stranger')
+    overlap.units.pet = { guid = 'Pet-1-ABC', first = 'Companion', player = false, friend = true, pet = true, owner = guid }
+    local petPlate = overlap:plate('pet')
+    overlap:load(); overlap:flush()
+    check(near('00FF00', overlap:label(overlapPlate)) and near('00FF00', overlap:label(petPlate)), 'guild colour wins overlaps and companions follow owner colour')
+    overlap:option('guildColourMode', 'met')
+    check(near('0000FF', overlap:label(overlapPlate)), 'inherited Met colour does not block a lower custom colour')
+    overlap:option('showWoWFriends', false)
+    check(near('FF0000', overlap:label(overlapPlate)), 'disabling a higher category reveals the next matching custom colour')
+    overlap:option('groupColourMode', 'met'); overlap:option('metColour', 'ABCDEF')
+    check(near('ABCDEF', overlap:label(overlapPlate)), 'all inherited categories follow live edits to Met colour')
+    overlap:option('guildColourMode', 'custom'); overlap.ns.ResetAppearance('met'); overlap:flush()
+    check(near('00FF00', overlap:label(overlapPlate)), 'resetting the base Met style preserves category overrides')
+    overlap.ns.ResetAppearance('all'); overlap:flush()
+    check(near('FFD100', overlap:label(overlapPlate)) and overlap.ns.db.options.guildColourMode == 'met', 'reset all appearance restores inherited category colours')
+    check(not overlap:option('guildColourMode', 'bogus') and not overlap:option('guildColour', 'not hex'), 'invalid category modes and colours are rejected')
+
+    local old = world({ options = { showFriends = true } }); old:load(); old:flush()
+    check(old.ns.db.options.showFriends and old.ns.db.options.showWoWFriends and old.ns.db.options.showBattleNetFriends, 'legacy combined Friends preference migrates to all three friend types')
+    local explicit = world({ options = { showFriends = true, showWoWFriends = false, showBattleNetFriends = false } }); explicit:load(); explicit:flush()
+    check(not explicit.ns.db.options.showWoWFriends and not explicit.ns.db.options.showBattleNetFriends, 'migration preserves explicit split friend preferences')
+    local nonfriend = world({ options = { showBattleNetFriends = true, hideUnmet = true } })
+    nonfriend.env.C_BattleNet.GetAccountInfoByGUID = function() return { isFriend = false } end
+    local nonfriendPlate = nonfriend:plate('stranger'); nonfriend:load(); nonfriend:flush()
+    check(not nonfriend:label(nonfriendPlate).shown, 'account information for a non-friend never grants recognition')
+    nonfriend.env.Enum = { BattleNetFriendLevel = { Title = 3 } }
+    nonfriend.env.C_BattleNet.GetAccountInfoByGUID = function() return { isFriend = true, friendLevel = 3 } end
+    nonfriend:fire('BN_FRIEND_INFO_CHANGED'); nonfriend:flush()
+    check(not nonfriend:label(nonfriendPlate).shown, 'WoW Friends do not leak into the Battle.net category')
+    nonfriend:option('showWoWFriends', true)
+    check(nonfriend:label(nonfriendPlate).shown, 'WoW Friends recognition works independently')
+    nonfriend.env.C_BattleNet.GetAccountInfoByGUID = function() return { isFriend = true, friendLevel = { secret = true } } end
+    nonfriend:fire('BN_FRIEND_INFO_CHANGED'); nonfriend:flush()
+    check(not nonfriend:label(nonfriendPlate).shown, 'restricted friend levels cannot be misclassified')
+
+    local club = world({ options = { hideUnmet = true, showCommunities = true, communityColourMode = 'custom', communityColour = '4488CC' } })
+    communities(club); club.clubReady = false
+    local clubPlate = club:plate('stranger'); club:load(); club:flush()
+    check(not club:label(clubPlate).shown and club.focusRequests == 0, 'unselected communities never grant recognition or request rosters')
+    check(#club.ns.Social.clubs == 2 and not club.ns.SetCommunitySelected('99', true), 'community chooser excludes guild and account-only clubs')
+    check(club.ns.SetCommunitySelected('11', true), 'community selection accepts a joined character community')
+    club:flush()
+    check(club.focusRequests == 1 and club.ns.Social.loadingCount == 1 and not club:label(clubPlate).shown, 'selected community requests its roster once and waits for readable membership')
+    for _ = 1, 20 do club:tick() end
+    check(club.focusRequests == 1, 'ordinary rendering never repeatedly requests community rosters')
+    club.clubReady = true; club:fire('CLUB_MEMBERS_UPDATED', 11); club:flush()
+    check(club:label(clubPlate).shown and near('4488CC', club:label(clubPlate)) and not club.ns.db.known[guid], 'community roster event recognises by GUID without permanently meeting')
+    local clubReads, writes = club.clubReads, club.writes
+    club:option('communityColour', '123456')
+    check(club.clubReads == clubReads and club.writes == writes, 'colour changes neither enumerate rosters nor change nameplate settings')
+    club.clubGuids = {}; club:fire('CLUB_MEMBER_REMOVED', 11); club:flush()
+    check(not club:label(clubPlate).shown, 'leaving a selected community removes automatic recognition')
+    club.clubGuids = { guid }; club:fire('CLUB_MEMBER_ADDED', 11); club:flush()
+    club.ns.SetCommunitySelected('11', false); club:flush()
+    check(not club:label(clubPlate).shown, 'deselecting a community removes its recognition immediately')
+    club.ns.SetCommunitySelected('11', true); club:flush()
+    club.clubs = {}; club:fire('CLUB_REMOVED', 11); club:flush()
+    check(not club:label(clubPlate).shown and #club.ns.Social.clubs == 0, 'removed subscriptions do not leave stale membership')
+
+    local delta = world({ options = { showCommunities = true }, communities = { ['11'] = true, ['12'] = true } })
+    communities(delta)
+    delta.env.C_Club.GetClubMembers = function() return { guid } end
+    local memberReads = 0
+    delta.env.C_Club.GetMemberInfo = function(_, id) memberReads = memberReads + 1; return { guid = id } end
+    delta:load(); delta:flush()
+    local rosterReads = delta.clubReads
+    memberReads = 0
+    delta:fire('CLUB_MEMBER_PRESENCE_UPDATED', 11, guid); delta:flush()
+    check(memberReads == 1 and delta.clubReads == rosterReads, 'presence changes read only the changed member rather than whole rosters')
+    delta:fire('CLUB_MEMBER_REMOVED', 11, guid); delta:flush()
+    check(delta.ns.Social.IsCommunityMember(guid), 'overlapping communities retain recognition when one membership ends')
+    delta:fire('CLUB_MEMBER_REMOVED', 12, guid); delta:flush()
+    check(not delta.ns.Social.IsCommunityMember(guid), 'removing the final selected membership clears recognition')
+    delta:fire('CLUB_MEMBER_ADDED', 11, guid); delta:flush()
+    check(delta.ns.Social.IsCommunityMember(guid), 'incremental additions restore recognition by GUID')
+    delta.env.C_Club.GetMemberInfo = function() return { guid = { secret = true } } end
+    delta:fire('CLUB_MEMBER_UPDATED', 11, guid); delta:flush()
+    check(not delta.ns.Social.IsCommunityMember(guid), 'restricted member IDs are never resolved by name or stale identity')
+    local hiddenUpdates = 0
+    local hiddenDropdown = delta.env.Acquainted_guildColourMode
+    local originalUpdate = hiddenDropdown.Update
+    hiddenDropdown.Update = function(self) hiddenUpdates = hiddenUpdates + 1; originalUpdate(self) end
+    delta.category.frame:Hide()
+    delta.env.C_Club.GetMemberInfo = function(_, id) return { guid = id } end
+    delta:fire('CLUB_MEMBER_ADDED', 11, guid); delta:flush()
+    check(hiddenUpdates == 0 and delta.ns.Social.IsCommunityMember(guid), 'background roster events update membership without rebuilding hidden settings controls')
+    local unavailable = world({ options = { showCommunities = true }, known = { [guid] = { name = 'Aster Moon' } } })
+    local unavailablePlate = unavailable:plate('stranger'); unavailable:load(); unavailable:flush()
+    check(unavailable:label(unavailablePlate).shown and not unavailable.env.Acquainted_CommunityPicker.enabled, 'missing community API leaves normal acquaintances and settings working')
+
+    local ui = world({ options = { showGuild = true } }); ui.guild = guid; communities(ui)
+    local uiPlate = ui:plate('stranger'); ui:load(); ui:flush()
+    local env = ui.env
+    click(ui, env.Acquainted_RecognitionTab)
+    check(env.Acquainted_guildColourMode:GetText() == 'Met colour' and not env.Acquainted_guildColourButton.shown, 'category UI starts with inherited colour and a hidden custom swatch')
+    env.Acquainted_guildColourMode.menuItems[2].callback(); ui:flush()
+    check(env.Acquainted_guildColourButton.shown and env.Acquainted_guildColourMode:GetText() == 'Custom colour', 'native colour dropdown reveals the custom swatch')
+    click(ui, env.Acquainted_guildColourButton)
+    local picker = env.ColorPickerFrame
+    picker.selected = { .2, .4, .6 }; picker.options.swatchFunc(); ui:flush()
+    check(near('336699', ui:label(uiPlate)), 'category picker previews colour changes on live names')
+    picker.options.cancelFunc(); picker:Hide(); ui:flush()
+    check(near('FFD100', ui:label(uiPlate)), 'cancelling the category picker restores its previous colour')
+    click(ui, env.Acquainted_showCommunitiesCheck)
+    env.Acquainted_showCommunitiesCheck:SetChecked(true); click(ui, env.Acquainted_showCommunitiesCheck)
+    local selectedKey
+    for _, entry in ipairs(env.Acquainted_CommunityPicker.menuItems) do if entry.text == 'Wayfarers' then selectedKey = entry; break end end
+    check(selectedKey ~= nil and env.Acquainted_CommunityPicker.enabled, 'joined communities appear in the native multi-select picker')
+    selectedKey.callback(); ui:flush()
+    check(ui.ns.db.communities['11'] == true and ui.ns.Social.selectedCount == 1, 'community picker saves the selected community')
+
+    local paused = world({ options = { showCommunities = true, onlyWhileIC = true }, communities = { ['11'] = true } })
+    communities(paused); paused.clubReady = false; setTRPStatus(paused, false)
+    paused:load(); paused:flush()
+    check(paused.focusRequests == 0, 'IC-only pause defers community roster requests')
+    paused.inCharacter = true; paused:tick()
+    check(paused.focusRequests == 1, 'resuming IC loads selected community rosters')
+end
+TestRecognitionColours()
 
 print('Acquainted: ' .. checks .. ' checks passed')
 return {}

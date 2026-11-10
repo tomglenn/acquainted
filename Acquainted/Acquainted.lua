@@ -5,7 +5,7 @@ local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
 local appliedNativeSettings
 local toggledAcquaintances = {}
-ns.version = "0.8.1"
+ns.version = "0.9.0"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then
@@ -122,12 +122,12 @@ local function Render(plate, visited)
     else
         RestoreCompanionVisuals(state)
     end
-    local known, name
+    local known, name, categoryColour, recognitionReason
     if companion then
-        known = db.options.showPetNames and ns.KnownGUID(ownerGUID, ownerUnit, db)
+        if db.options.showPetNames then known, recognitionReason, categoryColour = ns.KnownGUID(ownerGUID, ownerUnit, db) end
         name = known and ns.CompanionName(unit)
     else
-        known = ns.Known(unit, db)
+        known, recognitionReason, categoryColour = ns.Known(unit, db)
         -- Anonymous modes must not depend on the player's name being accessible.
         if (known and not db.options.hideMet) or (not known and not db.options.hideUnmet and db.options.unmetDisplay == "name") then
             name = ns.DisplayName(unit, db)
@@ -138,6 +138,7 @@ local function Render(plate, visited)
     if not name or name == "" then return end
     local guild = not companion and ns.ShowGuild(known, db.options) and ns.GuildName(unit)
     local fontSize, height, r, g, b = ns.Appearance(known, db.options)
+    if known and categoryColour then r, g, b = ns.ColourRGB(categoryColour) end
     local guildSize = math.max(8, math.floor(fontSize * 0.8))
     local health = frame.healthBar or (frame.HealthBarsContainer and frame.HealthBarsContainer.healthBar) or frame.HealthBarsContainer
     local namesOnly = not companion and ns.IsReadable(friendly) and friendly and ns.GameSettings.NamesOnly()
@@ -180,6 +181,8 @@ local function Service()
     local wasActive, hadRestore, wasNativeReason, wasFailed = active, ns.GameSettings.HasPending(db), ns.nativeSettingsReason, failed
     servicing = true
     local ok, err = pcall(function()
+        local socialChanged = ns.Social.Refresh()
+        if socialChanged and ns.RefreshSocialSettings then ns.RefreshSocialSettings() end
         ns.nativeSettingsReason = ns.NativeSettingsReason()
         local nativeSettings = ns.UseOverlay(db.options) or ns.nativeSettingsReason ~= nil
         if appliedNativeSettings ~= nativeSettings then needsSetup = true end
@@ -189,6 +192,8 @@ local function Service()
             local applied, reason = ns.GameSettings.Apply(db, db.options)
             if applied then
                 active, needsSetup, appliedNativeSettings = true, false, nativeSettings
+                ns.Social.MarkDirty()
+                ns.Social.Refresh()
                 ns.Recent.CaptureGroup()
                 for _, plate in ipairs(C_NamePlate.GetNamePlates(false)) do
                     if CanTouch(plate) then ns.Recent.CaptureNearby(plate.namePlateUnitToken) end
@@ -239,6 +244,7 @@ function ns.SetOption(key, value)
     if value == nil then return false end
     if key == "enabled" and not value and ns.CloseColourPicker then ns.CloseColourPicker() end
     db.options[key] = value
+    if key == "showCommunities" or key == "enabled" or key == "onlyWhileIC" then ns.Social.MarkDirty() end
     if key == "enabled" or key == "affectEnemies" or key == "overlayOnly" or key == "onlyWhileIC" then needsSetup, failed = true, false end
     ns.Queue()
     if ns.RefreshSettings then ns.RefreshSettings() end
@@ -253,6 +259,11 @@ function ns.ResetAppearance(which)
     else return false end
     if ns.FinishSettingsInput then ns.FinishSettingsInput() end
     if ns.CloseColourPicker then ns.CloseColourPicker() end
+    if which == "all" then
+        for _, category in ipairs(ns.recognitionCategories) do
+            keys[#keys + 1], keys[#keys + 2] = category.modeKey, category.colourKey
+        end
+    end
     for _, key in ipairs(keys) do db.options[key] = ns.defaults[key] end
     ns.Queue()
     if ns.RefreshSettings then ns.RefreshSettings() end
@@ -376,6 +387,11 @@ local function Start()
         db.options.hideUnmet = not db.options.showUnmetNames
     end
     db.options.showUnmetNames = nil
+    -- The old Friends switch covered both legacy characters and BNet/title
+    -- friends. Split it once, preserving explicitly saved new preferences.
+    for _, key in ipairs({ "showWoWFriends", "showBattleNetFriends" }) do
+        if db.options[key] == nil then db.options[key] = db.options.showFriends == true end
+    end
     for key, value in pairs(ns.defaults) do
         local normalized = ns.NormalizeOption(key, db.options[key])
         if normalized == nil then normalized = value end
@@ -384,6 +400,8 @@ local function Start()
     if db.enabled ~= nil then db.options.enabled = db.enabled; db.enabled = nil end
     db.schema = 4
     ns.db = db
+    ns.Social.Initialize(db)
+    ns.Social.Refresh()
     ns.Recent.Initialize(db)
     ns.GameSettings.WatchNamesOnly(function(key, value)
         if active and not servicing and not stopping and db.options.enabled
@@ -450,6 +468,10 @@ events:SetScript("OnEvent", function(_, event, unit, value)
     elseif not db then return
     elseif event == "PLAYER_LOGOUT" or event == "ADDONS_UNLOADING" then Unload()
     else
+        if event:match("^BN_FRIEND_") or event == "FRIENDLIST_UPDATE" then ns.Social.InvalidateFriends() end
+        if event == "CLUB_MEMBER_ADDED" or event == "CLUB_MEMBER_REMOVED" or event == "CLUB_MEMBER_UPDATED"
+            or event == "CLUB_MEMBER_PRESENCE_UPDATED" then ns.Social.MemberChanged(event, unit, value)
+        elseif event:match("^CLUB_") or event == "INITIAL_CLUBS_LOADED" or event == "PLAYER_ENTERING_WORLD" then ns.Social.MarkDirty() end
         if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then ns.Recent.CaptureGroup() end
         if event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_NAME_UPDATE" then ns.Recent.CaptureNearby(unit) end
         if event == "CVAR_UPDATE" and active and not servicing and not stopping and db.options.enabled
@@ -479,6 +501,13 @@ for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_LOGOUT", "ADDONS_UNLOADING", "P
     "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "PLAYER_TARGET_CHANGED", "UNIT_NAME_UPDATE",
     "FRIENDLIST_UPDATE", "BN_FRIEND_INFO_CHANGED", "GUILD_ROSTER_UPDATE", "UNIT_GUILD_UPDATE",
     "GROUP_ROSTER_UPDATE", "UNIT_PET", "CVAR_UPDATE" }) do events:RegisterEvent(event) end
+-- Community events are absent on some clients; missing APIs leave the
+-- optional feature unavailable without preventing normal acquaintance styling.
+for _, event in ipairs({ "INITIAL_CLUBS_LOADED", "CLUB_ADDED", "CLUB_REMOVED", "CLUB_UPDATED", "CLUB_MEMBERS_UPDATED",
+    "CLUB_MEMBER_ADDED", "CLUB_MEMBER_REMOVED", "CLUB_MEMBER_UPDATED", "CLUB_MEMBER_PRESENCE_UPDATED",
+    "BN_FRIEND_ADDED", "BN_FRIEND_REMOVED", "BN_FRIEND_ACCOUNT_ONLINE", "BN_FRIEND_ACCOUNT_OFFLINE" }) do
+    pcall(events.RegisterEvent, events, event)
+end
 -- Lifecycle hooks only. No hooks on any native frame setter.
 local function IsOurAddon(name)
     if type(name) == "number" and C_AddOns.GetAddOnName then name = C_AddOns.GetAddOnName(name) end

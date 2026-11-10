@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+- Add optional custom name colours for guild members, WoW Friends, Battle.net friends, character friends, Total RP 3 relationships, selected communities, and party/raid members. Every category inherits the existing Met colour by default.
+- Add native colour dropdowns, custom swatches, and colour previews to Recognition. The first enabled matching custom colour in the displayed order wins; inherited colours do not block lower custom overrides. Names and guild lines share the colour; companion names follow their owner.
+- Preserve category colours after manual Meet and nickname changes. Individual Met resets keep overrides; Reset all appearance returns every category to Met colour. Native health and cast bars remain unchanged.
+- Split the legacy combined Friends option into character, WoW/title, and Battle.net friend settings, preserving existing preferences on upgrade. Require actual friendship instead of treating any returned account information as a friend.
+- Add opt-in selection of joined WoW character communities. Match readable roster GUIDs, respond to membership/subscription changes, cache rosters and friend lookups, and request selected missing rosters without switching the community UI or chat stream. Automatic recognition never adds permanent acquaintances.
+
 ## 0.8.1
 
 - Replace red navigation buttons with native WoW tabs for Appearance, Recognition, Acquaintances, and Help, plus smaller Saved/Recent tabs. Active tabs have a distinct selected state and do not reload their view when clicked again.

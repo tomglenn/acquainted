@@ -1,12 +1,31 @@
 local _, ns = ...
 ns.defaults = {
-    enabled = true, showFriends = false, showGuild = true, showGroup = true,
+    enabled = true, showFriends = false, showWoWFriends = false, showBattleNetFriends = false,
+    showCommunities = false, showGuild = true, showGroup = true,
     useTRPRelations = true, useRPNames = true, affectEnemies = false, onlyWhileIC = false,
     showGuildName = true, showPetNames = true, fontSize = 22, nameOffset = -40,
     metColour = "FFD100", hideMet = false, hideUnmet = false, showUnmetGuildName = false,
     unmetDisplay = "name", overlayOnly = false,
     unmetFontSize = 14, unmetNameOffset = -40, unmetColour = "999999",
 }
+-- Display order is also custom-colour priority. Inherited Met colour never
+-- masks a lower-priority custom colour, including for manually met players.
+ns.recognitionCategories = {
+    { id = "guild", label = "Guild members", option = "showGuild" },
+    { id = "wowFriend", label = "WoW Friends", option = "showWoWFriends" },
+    { id = "battleNetFriend", label = "Battle.net friends", option = "showBattleNetFriends" },
+    { id = "characterFriend", label = "Character friends", option = "showFriends" },
+    { id = "trpRelation", label = "Total RP 3 relationships", option = "useTRPRelations" },
+    { id = "community", label = "Selected communities", option = "showCommunities" },
+    { id = "group", label = "Party and raid members", option = "showGroup" },
+}
+ns.colourKeys = { metColour = true, unmetColour = true }
+ns.colourModeKeys = {}
+for _, category in ipairs(ns.recognitionCategories) do
+    category.modeKey, category.colourKey = category.id .. "ColourMode", category.id .. "Colour"
+    ns.defaults[category.modeKey], ns.defaults[category.colourKey] = "met", "FFD100"
+    ns.colourModeKeys[category.modeKey], ns.colourKeys[category.colourKey] = true, true
+end
 ns.optionRanges = {
     fontSize = { 8, 48 }, unmetFontSize = { 8, 48 },
     nameOffset = { -200, 100 }, unmetNameOffset = { -200, 100 },
@@ -21,7 +40,8 @@ end
 function ns.NormalizeOption(key, value)
     if ns.defaults[key] == nil or type(value) ~= type(ns.defaults[key]) then return nil end
     if key == "unmetDisplay" and value ~= "name" and value ~= "label" and value ~= "icon" then return nil end
-    if key == "metColour" or key == "unmetColour" then return ns.NormalizeHex(value) end
+    if ns.colourModeKeys[key] and value ~= "met" and value ~= "custom" then return nil end
+    if ns.colourKeys[key] then return ns.NormalizeHex(value) end
     local range = ns.optionRanges[key]
     if range then
         if value ~= value or value == math.huge or value == -math.huge then return nil end
@@ -128,20 +148,41 @@ end
 function ns.IsGroupMember(unit)
     return unit and (Check(UnitInParty, unit) or Check(UnitInRaid, unit)) or false
 end
+function ns.AutoRecognition(guid, unit, db, customOnly)
+    local options, firstMatch, hasCustom = db.options, nil, false
+    local friendKind
+    for _, category in ipairs(ns.recognitionCategories) do
+        if options[category.option] and options[category.modeKey] == "custom" then hasCustom = true; break end
+    end
+    if customOnly and not hasCustom then return false, "unknown" end
+    for _, category in ipairs(ns.recognitionCategories) do
+        if options[category.option] and (not customOnly or options[category.modeKey] == "custom") then
+            local id, matches = category.id, false
+            if id == "guild" then matches = guid and Check(IsGuildMember, guid)
+            elseif id == "characterFriend" then matches = guid and Check(C_FriendList and C_FriendList.IsFriend, guid)
+            elseif id == "wowFriend" or id == "battleNetFriend" then
+                if friendKind == nil then friendKind = (guid and ns.Social.FriendKind(guid)) or false end
+                matches = friendKind == id
+            elseif id == "group" then matches = ns.IsGroupMember(unit)
+            elseif id == "community" then matches = guid and ns.Social.IsCommunityMember(guid)
+            elseif id == "trpRelation" then
+                matches = (unit and Check(ns.TRPRelation, unit)) or (guid and Check(ns.TRPRelationByGUID, guid))
+            end
+            if matches then
+                firstMatch = firstMatch or id
+                if options[category.modeKey] == "custom" then return true, firstMatch, options[category.colourKey] end
+                if not hasCustom then return true, firstMatch end
+            end
+        end
+    end
+    return firstMatch ~= nil, firstMatch or "unknown"
+end
 function ns.KnownGUID(guid, unit, db)
     if not ns.IsReadable(guid) then return false, "owner unavailable" end
-    local options = db.options
     if guid and guid == UnitGUID("player") then return true, "self" end
-    if guid and db.known[guid] then return true, "remembered" end
-    if options.showFriends and guid then
-        if Check(C_FriendList and C_FriendList.IsFriend, guid)
-            or Check(C_BattleNet and C_BattleNet.GetAccountInfoByGUID, guid) then return true, "friend" end
-    end
-    if options.showGuild and guid and Check(IsGuildMember, guid) then return true, "guild" end
-    if options.showGroup and ns.IsGroupMember(unit) then return true, "group" end
-    if options.useTRPRelations and ((unit and Check(ns.TRPRelation, unit))
-        or (guid and Check(ns.TRPRelationByGUID, guid))) then return true, "TRP3 relationship" end
-    return false, "unknown"
+    local recognised, reason, colour = ns.AutoRecognition(guid, unit, db, guid and db.known[guid] ~= nil)
+    if guid and db.known[guid] then return true, "remembered", colour end
+    return recognised, reason, colour
 end
 function ns.Known(unit, db)
     return ns.KnownGUID(ns.Identity(unit), unit, db)

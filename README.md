@@ -6,6 +6,7 @@ Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It
 
 ## Features
 
+- **Recognition colours:** optionally distinguish guild members, WoW Friends, Battle.net friends, character friends, TRP3 relationships, selected communities, and group members. All inherit your Met colour until customised.
 - **Recent players:** find the last 50 group members and 50 nearby players under Acquaintances → Recent players. Meet someone after they have left or logged out, using their saved character identity. Group history has its own capacity, protected from nearby crowds.
 
 - Meet and Forget actions in player portrait, party, and raid context menus.
@@ -43,6 +44,18 @@ python3 install.py --addons-dir "/path/to/_forever_/Interface/AddOns"
 
 On macOS, running `python3 install.py` also detects the standard installation location. The installer permits updates while WoW is running and backs up existing Acquainted files locally. Use `/reload` for Lua updates; new addon folders or changed metadata may require restarting the game. **For the upgrade to 0.6.0, fully restart WoW once after installing** so the new account-wide cleanup bookkeeping is loaded.
 
+## Recognition and category colours
+
+Under **Recognition**, enable the categories you want to count as met. Each row has a **Met colour / Custom colour** dropdown and a preview. Choosing Custom reveals a colour swatch; changes preview on visible names immediately, and cancelling the picker restores the previous colour. Sizes, positions, Hide settings, and guild visibility remain shared with the Met appearance.
+
+If several categories match, the **first enabled matching custom colour** wins in this order: Guild members → WoW Friends → Battle.net friends → Character friends → TRP3 relationships → Selected communities → Party and raid members. Rows using Met colour do not block lower custom colours. Manually meeting someone preserves their category colour; their nickname still takes priority over RP or game names. Companion names follow their owner's category colour. Health-bar colours remain under WoW or your nameplate addon's control.
+
+**Selected communities** is off by default. Enable it and choose the WoW character communities whose members you recognise. Guilds use their own setting; Battle.net account communities are not included. Only readable character IDs count, so unavailable rosters show a waiting message and restricted/missing member IDs are skipped. Selected missing rosters are requested without changing the community window's selection or chat streams. Leaving a community or deselecting it removes its automatic recognition unless another rule or a manual acquaintance still applies.
+
+**WoW Friends** means the newer title-friend category, separate from Battle.net friends and traditional character friends. The old combined Friends preference is copied to all three switches on upgrade, while existing explicit split settings are preserved.
+
+Resetting the individual Met style changes the shared Met appearance and keeps custom category colours. **Reset all appearance** also resets category colours to inherited Met colour, preserving recognition switches, community selections, and saved acquaintances. Recognition rules and community selections are local settings and are excluded from acquaintance export/import.
+
 ## Recent players
 
 Open **Acquaintances → Recent players** to find someone you missed before a party disbanded. Group members appear first, followed by nearby players. The list stays still while you browse; click **Refresh list** to load newer encounters. Search their game or RP name and click **Meet**, even after they have gone offline. Met players move to **Saved acquaintances**, where you can edit their nickname.
@@ -75,7 +88,10 @@ The enable switch remains available on every tab. Changes apply immediately; typ
 | Setting | Default | Effect |
 | --- | --- | --- |
 | Enable Acquainted | On | Enable overhead-name filtering |
-| Recognise friends | Off | Recognise character and Battle.net friends |
+| Recognise character friends | Off | Recognise traditional character friends |
+| Recognise WoW Friends | Off | Recognise WoW/title friends separately |
+| Recognise Battle.net friends | Off | Recognise actual Battle.net friends |
+| Recognise selected communities | Off | Choose joined WoW character communities |
 | Recognise guild members | On | Recognise members of your guild |
 | Recognise party and raid members | On | Recognise your current group |
 | Recognise TRP3 relationships | On | Any available relationship except None counts |
