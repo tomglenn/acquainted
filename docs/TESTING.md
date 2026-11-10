@@ -64,7 +64,7 @@ versions without a saved recovery record. Do not reset all WoW settings as a tes
 
 ## IC-only mode
 
-Enable **Only active while IC in Total RP 3** under Recognition. Switch IC/OOC
+Enable **Only while in character in Total RP 3** under Recognition. Switch IC/OOC
 and change TRP3 profiles: OOC should restore native names and settings; IC should
 resume met/unmet styling. Check solo, grouped, instance, and Plater displays.
 Repeat during combat: custom labels should stop while OOC, with blocked settings

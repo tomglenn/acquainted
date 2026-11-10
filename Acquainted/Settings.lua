@@ -537,7 +537,7 @@ function ns.RefreshSettings()
             choice.button:SetText(ns.db.options.unmetDisplay == value and ("|cffffd100" .. choice.title .. "|r") or choice.title)
         end
     end
-    if overlayCaption then overlayCaption:SetText(type(Plater) == "table" and "Plater detected · labels are added alongside its names automatically." or "For other nameplate addons. Existing names stay visible, so names may appear twice.") end
+    if overlayCaption then overlayCaption:SetText(type(Plater) == "table" and "Plater detected · compatibility mode is automatic. Uses its existing nameplates." or "Requires friendly nameplates already enabled. Uses existing nameplate settings.") end
     RefreshPreviews()
     RefreshRecognition()
     if selectedTab == "Acquaintances" then RefreshPeople() end
@@ -612,12 +612,12 @@ function ns.CreateSettings()
     AppearanceCard(appearance, false, 328)
     Checkbox(appearance, "showPetNames", "Show pet and minion names for people you know", 16, -618, 570,
         "Includes your own companions. Pets of unmet people stay hidden, even when unmet player names are visible.")
-    Checkbox(appearance, "overlayOnly", "Add labels alongside existing names", 16, -656, 570,
-        "Use with another nameplate addon. Keep its names and health bars, and add Acquainted labels alongside them. This can show duplicate names. Automatic with Plater. Change outside combat.")
+    Checkbox(appearance, "overlayOnly", "Compatibility mode for other nameplate addons", 16, -656, 570,
+        "Add Acquainted labels to nameplates already shown by WoW or another addon, keeping their existing names and health bars. Acquainted does not enable nameplates in this mode. Without visible friendly nameplates, its labels cannot appear. Names may appear twice. Automatic with Plater. Change outside combat.")
     overlayCaption = Text(appearance, "", "GameFontDisableSmall", 48, -694, 560)
     Button(appearance, "Reset all appearance", 180, 22, -730, function() ns.ResetAppearance("all") end, "Acquainted_ResetAll")
     Text(appearance, "Keeps acquaintances and recognition rules.", "GameFontDisableSmall", 216, -737, 400)
-    local recognition = Page("Recognition", 702)
+    local recognition = Page("Recognition", 706)
     Text(recognition, "Who should count as someone you know?", "GameFontNormalLarge", 16, -12, 600)
     Text(recognition, "Use the shared Met colour or choose a custom colour. If several categories match, the first custom colour below wins.", nil, 16, -44, 590)
     Text(recognition, "Recognise automatically", "GameFontNormal", 22, -88, 300)
@@ -642,21 +642,11 @@ function ns.CreateSettings()
     Text(recognition, "Which name should appear?", "GameFontNormal", 16, -516, 600)
     Checkbox(recognition, "useRPNames", "Use Total RP 3 roleplay names", 16, -542, 550,
         "Use roleplay names when available, otherwise the game name. A personal nickname takes priority.")
-    Text(recognition, "When to show names", "GameFontNormal", 16, -594, 600)
-    Checkbox(recognition, "onlyWhileIC", "Only active while IC in Total RP 3", 16, -618, 550,
+    Text(recognition, "Where and when to apply Acquainted", "GameFontNormal", 16, -594, 600)
+    Checkbox(recognition, "onlyWhileIC", "Only while in character in Total RP 3", 16, -618, 550,
         "Pause Acquainted while you are OOC and resume when you switch IC. Restores normal names and nameplate settings while paused; combat may delay settings cleanup. Your acquaintances are kept. Has no effect without Total RP 3.")
-    local advanced = CreateFrame("Frame", nil, recognition)
-    advanced:SetPoint("TOPLEFT", 0, -704); advanced:SetSize(640, 120); advanced:Hide()
-    Checkbox(advanced, "affectEnemies", "Also filter enemy players", 16, -4, 550,
-        "Apply Acquainted to enemy players and their companions too. Health bars are preserved. Change this outside combat.")
-    Text(advanced, "Health bars are preserved. Change this outside combat.", "GameFontDisableSmall", 48, -44, 550)
-    local advancedButton
-    advancedButton = Button(recognition, "+ Advanced", 144, 16, -666, function()
-        local shown = not advanced:IsShown()
-        advanced:SetShown(shown)
-        recognition:SetHeight(shown and 788 or 702)
-        advancedButton:SetText(shown and "− Advanced" or "+ Advanced")
-    end, "Acquainted_AdvancedButton")
+    Checkbox(recognition, "affectEnemies", "Include enemy players", 16, -666, 550,
+        "Apply Acquainted to enemy players and their companions too. Change this outside combat.")
     local people = Page("Acquaintances", 204)
     peopleTitle = Text(people, "Your acquaintances", "GameFontNormalLarge", 16, -12, 290)
     peopleSubtitle = Text(people, "Saved separately for this character.", "GameFontDisableSmall", 16, -40, 600)
@@ -826,7 +816,7 @@ function ns.CreateSettings()
     HelpBlock("Useful commands", "GameFontNormal", 20)
     HelpBlock("/acq — open settings\n/acq togglemet — Meet / Forget your target\n/acq meet [nickname] — meet your target, optionally with a nickname\n/acq forget — forget your target\n/acq off — turn off and restore the original game settings", nil, 10)
     HelpBlock("What affects name display?", "GameFontNormal", 20)
-    HelpBlock("Friendly nameplates / Always show nameplates: needed for custom names.\nShow only name: controls friendly health bars, including unmet players. You can change it while Acquainted is active.\nOther nameplate addons: Plater is automatic. For others, try Add labels alongside existing names.\nInstances: Blizzard may restrict custom displays.", nil, 10)
+    HelpBlock("Friendly nameplates / Always show nameplates: needed for custom names.\nShow only name: controls friendly health bars, including unmet players. You can change it while Acquainted is active.\nOther nameplate addons: Plater is automatic. For others, use Compatibility mode with friendly nameplates already enabled.\nInstances: Blizzard may restrict custom displays.", nil, 10)
     HelpBlock("A few things to know", "GameFontNormal", 20)
     HelpBlock("Grouping keeps met/unmet names active. Party and raid members count as met by default; health bars follow your settings.\n\nForgetting removes a saved acquaintance. Recognition rules can still count them as met. Use Acquaintances to export or import your list.\n\nIf a required visibility setting changes, filtering stops. Use /acq status for details or /acq setup to retry. Combat may delay cleanup.", nil, 10)
     local function LayoutHelp()

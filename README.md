@@ -77,7 +77,7 @@ Forgetting someone removes only the manual record. Enabled friend, guild, group,
 ## Settings
 
 - **Appearance:** starts with a short explanation of Blizzard friendly nameplates and temporary settings. Compare met and unmet styles side by side with live previews. Each card has a **Hide** checkbox; unmet people also have **Name**, **Unmet**, and **Icon** display choices. Drag the size and position sliders, or type exact values and press Enter. Lower/Higher labels show the direction. Click a colour swatch to open the colour picker. Each card has its own guild toggle and appearance reset; pet names and the full appearance reset are below the cards. Preview position is shown at quarter scale; in-game height uses the value entered.
-- **Recognition:** choose who automatically counts as met. The roleplay-name preference is separate; enemy filtering is under **Advanced**.
+- **Recognition:** choose who automatically counts as met. The roleplay-name preference is separate; enemy filtering is directly available on this page.
 - **Acquaintances:** search saved names and nicknames, edit a nickname, or forget a saved person. **Export list** and **Import list** sit at the top right beside **Your acquaintances**. Save a blank nickname to use their roleplay or game name again.
 - **Help:** commands, keybind guidance, and a short list of Blizzard settings and addon/instance restrictions that affect name display.
 
@@ -95,9 +95,9 @@ The enable switch remains available on every tab. Changes apply immediately; typ
 | Recognise guild members | On | Recognise members of your guild |
 | Recognise party and raid members | On | Recognise your current group |
 | Recognise TRP3 relationships | On | Any available relationship except None counts |
-| Only active while IC in Total RP 3 | Off | Pause displays and restore normal nameplate settings while OOC; resume while IC. No effect without TRP3. |
+| Only while in character in Total RP 3 | Off | Pause displays and restore normal nameplate settings while OOC; resume while IC. No effect without TRP3. |
 | Use TRP3 names | On | Prefer RP names when available |
-| Also filter enemy players | Off | Apply the same rules to exposed enemy player/companion plates |
+| Include enemy players | Off | Apply the same rules to exposed enemy player/companion plates |
 | Show guild beneath known names | On | Display the actual game guild in angle brackets |
 | Show pet/minion names for known people | On | Display companions only when their owner is known |
 | Met name size | 22 | Adjust between 8 and 48 |
@@ -106,7 +106,7 @@ The enable switch remains available on every tab. Changes apply immediately; typ
 | Hide met people | Off | Hide the met Acquainted name and guild line |
 | Hide unmet people | Off | Hide the unmet Acquainted display and guild line |
 | Unmet display | Name | Choose the player name, “Unmet”, or a grey person icon |
-| Add labels alongside existing names | Off; automatic with Plater | Add labels without changing native names or nameplate settings |
+| Compatibility mode for other nameplate addons | Off; automatic with Plater | Add labels without changing native names or nameplate settings |
 | Show guild names for unmet people | Off | Show a smaller guild line beneath visible unmet names |
 | Unmet name size | 14 | Adjust between 8 and 48 |
 | Unmet name height | -40 | Adjust independently between -200 and 100 |
@@ -122,7 +122,7 @@ Your own character counts as a known companion owner. Player Hide controls do no
 
 ## Using Acquainted with Plater
 
-Outside instances, Plater is detected automatically whether solo or grouped. Acquainted adds its own labels above the accessible plate without changing Plater's names, health bars, opacity, or nameplate settings. For other nameplate addons, enable **Add labels alongside existing names** outside combat.
+Outside instances, Plater is detected automatically whether solo or grouped. Acquainted adds its own labels above the accessible plate without changing Plater's names, health bars, opacity, or nameplate settings. For other nameplate addons, enable **Compatibility mode for other nameplate addons** outside combat. This uses existing nameplate settings: friendly nameplates must already be visible for Acquainted labels to appear. If your saved settings have them off, enabling compatibility mode restores ordinary names and leaves no friendly nameplates to attach Acquainted labels to. Leave compatibility mode off for normal standalone use.
 
 To use Acquainted as an unmet reminder:
 

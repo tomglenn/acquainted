@@ -5,7 +5,7 @@ local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
 local appliedNativeSettings
 local toggledAcquaintances = {}
-ns.version = "0.9.0"
+ns.version = "0.9.1"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then

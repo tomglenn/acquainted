@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1
+
+- Rename the overlay option to Compatibility mode for other nameplate addons and explain that friendly nameplates must already be enabled; Plater detection remains automatic.
+
+- Show enemy filtering directly on Recognition and remove the single-option Advanced section.
+- Rename the section to Where and when to apply Acquainted, with Only while in character in Total RP 3 and Include enemy players. Keep the combat restriction in the tooltip and remove the health-bar note.
+
 ## 0.9.0
 
 - Add optional custom name colours for guild members, WoW Friends, Battle.net friends, character friends, Total RP 3 relationships, selected communities, and party/raid members. Every category inherits the existing Met colour by default.
