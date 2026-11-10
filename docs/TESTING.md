@@ -61,3 +61,14 @@ On failure, record the scenario, `/acq status` output, and the affected setting'
 current value. Use `/acq off` outside combat. A full client restart expires native
 temporary overrides; it cannot repair unknown preference changes made by older
 versions without a saved recovery record. Do not reset all WoW settings as a test.
+
+## IC-only mode
+
+Enable **Only active while IC in Total RP 3** under Recognition. Switch IC/OOC
+and change TRP3 profiles: OOC should restore native names and settings; IC should
+resume met/unmet styling. Check solo, grouped, instance, and Plater displays.
+Repeat during combat: custom labels should stop while OOC, with blocked settings
+cleanup deferred until combat ends; resuming IC must also wait if necessary.
+Reload while OOC and check that no custom names or temporary overrides activate.
+Acquaintances and nicknames must survive each transition. Disable the option,
+and repeat without TRP3 installed: normal Acquainted displays should work.

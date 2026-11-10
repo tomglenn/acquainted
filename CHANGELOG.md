@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.5
+
+- Add an optional Only active while IC in Total RP 3 setting under Recognition, off by default. Pause displays and release temporary nameplate settings while OOC, then resume automatically while IC. Without TRP3, Acquainted continues normally.
+- Keep acquaintances and nicknames while paused, report the pause in settings/status, and defer combat-blocked cleanup or activation until combat ends.
+
 ## 0.7.4
 
 - Replace the unmet question mark with a bundled grey person silhouette, shared by the live display and settings preview. The icon follows the unmet size and position settings.

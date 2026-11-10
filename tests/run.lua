@@ -1838,5 +1838,84 @@ for _, overlay in ipairs({ false, true }) do
         'instance/overlay modes leave Show only name entirely under native control')
 end
 
+-- IC-only activation reads the current TRP3 player on each service pass.
+local function setTRPStatus(testWorld, initial)
+    testWorld.inCharacter = initial
+    testWorld.env.AddOn_TotalRP3 = { Player = { GetCurrentUser = function()
+        return { IsInCharacter = function() return testWorld.inCharacter end }
+    end } }
+end
+local noTRP = world({ options = { onlyWhileIC = true } })
+local noTRPPlate = noTRP:plate('stranger')
+noTRP:load(); noTRP:flush()
+check(noTRP:label(noTRPPlate).shown and noTRP.ns.IsEnabled(), 'IC-only preference has no effect without TRP3')
+
+for _, mode in ipairs({ 'standalone', 'group', 'instance', 'overlay', 'plater' }) do
+    local ic = world({ options = { onlyWhileIC = true }, known = { ['Player-1-A'] = { name = 'Aster Moon', nickname = 'Friend' } } })
+    ic.grouped = mode == 'group'
+    ic.instance = mode == 'instance'
+    if mode == 'overlay' then ic.env.AcquaintedDB.options.overlayOnly = true end
+    if mode == 'plater' then ic.env.Plater = {} end
+    setTRPStatus(ic, false)
+    local plate = ic:plate('stranger')
+    ic:load(); ic:flush()
+    check(ic.writes == 0 and plate.UnitFrame.name.alpha == 0.8 and not ic.ns.IsEnabled(), 'OOC login leaves native settings and names untouched: ' .. mode)
+    check(ic.ns.DisplayStatus():find('OOC', 1, true) ~= nil, 'settings explain OOC pause: ' .. mode)
+    ic.inCharacter = true; ic:tick()
+    check(ic:label(plate).shown and ic:label(plate).text == 'Friend' and ic.ns.IsEnabled(), 'IC automatically activates names with saved nicknames: ' .. mode)
+    ic.inCharacter = false; ic:tick()
+    check(not ic:label(plate).shown and plate.UnitFrame.name.alpha == 0.8, 'OOC releases custom displays and native masks: ' .. mode)
+    check(next(ic.temporaryCVars) == nil, 'OOC removes owned temporary settings: ' .. mode)
+    check(ic.ns.db.options.enabled and ic.ns.db.known['Player-1-A'].nickname == 'Friend', 'pausing preserves enable preference and acquaintances: ' .. mode)
+    ic:restored('OOC restores original effective settings: ' .. mode)
+    ic.inCharacter = true; ic:tick()
+    check(ic:label(plate).shown and ic.persistentWrites == 0, 'repeated IC transitions resume without persistent writes: ' .. mode)
+    ic:command('off'); ic:tick()
+    check(not ic:label(plate).shown, 'IC cannot override the main enable switch: ' .. mode)
+end
+
+local icCombat = world({ options = { onlyWhileIC = true } })
+setTRPStatus(icCombat, true)
+local icCombatPlate = icCombat:plate('stranger')
+icCombat:load(); icCombat:flush()
+icCombat.combat = true
+local combatWrites = icCombat.writes
+icCombat.inCharacter = false; icCombat:tick()
+check(not icCombat:label(icCombatPlate).shown and icCombatPlate.UnitFrame.name.alpha == 0.8, 'OOC during combat releases labels and native text immediately')
+check(icCombat.writes == combatWrites and icCombat.ns.GameSettings.HasPending(icCombat.ns.db), 'OOC during combat defers temporary settings cleanup')
+check(icCombat.ns.DisplayStatus():find('combat', 1, true) ~= nil, 'OOC combat pause reports pending cleanup')
+icCombat.combat = false; icCombat:fire('PLAYER_REGEN_ENABLED'); icCombat:flush()
+icCombat:restored('OOC deferred cleanup finishes after combat')
+icCombat.combat = true; icCombat.inCharacter = true; icCombat:tick()
+check(not icCombat:label(icCombatPlate).shown and next(icCombat.temporaryCVars) == nil, 'IC activation waits rather than changing settings during combat')
+icCombat.combat = false; icCombat:fire('PLAYER_REGEN_ENABLED'); icCombat:flush()
+check(icCombat:label(icCombatPlate).shown, 'IC activation resumes automatically after combat')
+icCombat.inCharacter = false; icCombat:tick()
+check(icCombat:option('onlyWhileIC', false) and icCombat:label(icCombatPlate).shown, 'turning off IC-only mode activates displays while OOC')
+icCombat:option('onlyWhileIC', true)
+check(not icCombat:label(icCombatPlate).shown, 'enabling IC-only mode while OOC pauses displays')
+icCombat.env.AddOn_TotalRP3.Player.GetCurrentUser = function() return { IsInCharacter = function() return true end } end
+icCombat:tick()
+check(icCombat:label(icCombatPlate).shown, 'switching TRP3 profiles uses the new current player status')
+icCombat.env.AddOn_TotalRP3.Player.GetCurrentUser = function() return nil end
+icCombat:tick()
+check(not icCombat:label(icCombatPlate).shown and icCombat.ns.DisplayStatus():find('waiting for Total RP 3', 1, true), 'unready TRP3 player safely pauses and explains why')
+icCombat.env.AddOn_TotalRP3.Player.GetCurrentUser = function() error('TRP3 is not ready') end
+icCombat:tick()
+check(not icCombat:label(icCombatPlate).shown, 'TRP3 API errors do not activate displays or escape the service')
+setTRPStatus(icCombat, true); icCombat:tick()
+check(icCombat:label(icCombatPlate).shown, 'TRP3 API recovery automatically resumes displays')
+icCombat.env.AddOn_TotalRP3, icCombat.env.TRP3_API = nil, nil
+icCombat:tick()
+check(icCombat:label(icCombatPlate).shown, 'removing TRP3 returns to ordinary Acquainted behaviour')
+local optOut = world()
+setTRPStatus(optOut, false)
+local optOutPlate = optOut:plate('stranger')
+optOut:load(); optOut:flush()
+check(not optOut.ns.db.options.onlyWhileIC and optOut:label(optOutPlate).shown, 'IC-only mode defaults off even with TRP3 OOC')
+optOut.env.AddOn_TotalRP3.Player.GetCurrentUser = function() error('must not read status when disabled') end
+optOut:tick()
+check(optOut:label(optOutPlate).shown, 'disabled IC-only option does not consult TRP3 status')
+
 print('Acquainted: ' .. checks .. ' checks passed')
 return {}

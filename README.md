@@ -2,7 +2,7 @@
 
 *Learn their name when you meet them.*
 
-Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It gives met and unmet players distinct overhead name styles, with independent Hide controls for met and unmet people. Unmet people can show their name, an “Unmet” label, or a question-mark indicator. Other players do not need an addon. **Total RP 3 integration is optional.**
+Acquainted is a standalone roleplay addon for **World of Warcraft: Forever**. It gives met and unmet players distinct overhead name styles, with independent Hide controls for met and unmet people. Unmet people can show their name, an “Unmet” label, or a grey person icon. Other players do not need an addon. **Total RP 3 integration is optional.**
 
 ## Features
 
@@ -67,6 +67,7 @@ The enable switch remains available on every tab. Changes apply immediately; typ
 | Recognise guild members | On | Recognise members of your guild |
 | Recognise party and raid members | On | Recognise your current group |
 | Recognise TRP3 relationships | On | Any available relationship except None counts |
+| Only active while IC in Total RP 3 | Off | Pause displays and restore normal nameplate settings while OOC; resume while IC. No effect without TRP3. |
 | Use TRP3 names | On | Prefer RP names when available |
 | Also filter enemy players | Off | Apply the same rules to exposed enemy player/companion plates |
 | Show guild beneath known names | On | Display the actual game guild in angle brackets |
@@ -76,7 +77,7 @@ The enable switch remains available on every tab. Changes apply immediately; typ
 | Met name colour | Gold | Choose with the colour picker; applies to the guild line too |
 | Hide met people | Off | Hide the met Acquainted name and guild line |
 | Hide unmet people | Off | Hide the unmet Acquainted display and guild line |
-| Unmet display | Name | Choose the player name, “Unmet”, or a question-mark indicator |
+| Unmet display | Name | Choose the player name, “Unmet”, or a grey person icon |
 | Add labels alongside existing names | Off; automatic with Plater | Add labels without changing native names or nameplate settings |
 | Show guild names for unmet people | Off | Show a smaller guild line beneath visible unmet names |
 | Unmet name size | 14 | Adjust between 8 and 48 |

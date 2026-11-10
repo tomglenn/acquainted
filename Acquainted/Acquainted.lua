@@ -5,7 +5,7 @@ local db, active, suspended, stopping, servicing, queued, failed
 local needsSetup, lastError = true, nil
 local appliedNativeSettings
 local toggledAcquaintances = {}
-ns.version = "0.7.4"
+ns.version = "0.7.5"
 function ns.Say(text) DEFAULT_CHAT_FRAME:AddMessage("|cff80d8c0Acquainted:|r " .. text) end
 function ns.Error(err)
     if not lastError then
@@ -183,7 +183,7 @@ local function Service()
         ns.nativeSettingsReason = ns.NativeSettingsReason()
         local nativeSettings = ns.UseOverlay(db.options) or ns.nativeSettingsReason ~= nil
         if appliedNativeSettings ~= nativeSettings then needsSetup = true end
-        local enabled = db.options.enabled and not suspended and not failed
+        local enabled = db.options.enabled and not suspended and not failed and not ns.ICPauseReason(db.options)
         if enabled and (not active or needsSetup) then
             -- Timer only: settings callbacks must finish before any CVar write.
             local applied, reason = ns.GameSettings.Apply(db, db.options)
@@ -232,7 +232,7 @@ function ns.SetOption(key, value)
     if value == nil then return false end
     if key == "enabled" and not value and ns.CloseColourPicker then ns.CloseColourPicker() end
     db.options[key] = value
-    if key == "enabled" or key == "affectEnemies" or key == "overlayOnly" then needsSetup, failed = true, false end
+    if key == "enabled" or key == "affectEnemies" or key == "overlayOnly" or key == "onlyWhileIC" then needsSetup, failed = true, false end
     ns.Queue()
     if ns.RefreshSettings then ns.RefreshSettings() end
     return true
@@ -292,7 +292,7 @@ function ns.RememberTarget(forget, nickname)
     ns.SetRemembered(guid, name, forget, nickname)
 end
 function ns.IsEnabled()
-    return db and db.options.enabled and not suspended and not stopping
+    return db and db.options.enabled and not suspended and not stopping and not ns.ICPauseReason(db.options)
 end
 function ns.DisplayStatus()
     local pending = ns.GameSettings.HasPending(db)
@@ -300,6 +300,11 @@ function ns.DisplayStatus()
         return pending and "Off · restoring original settings when combat ends." or "Off · original name settings restored."
     end
     if suspended or stopping then return "Disabled in the addon list · filtering stopped." end
+    local icPause = ns.ICPauseReason(db.options)
+    if icPause then
+        local reason = icPause == "ooc" and "Paused · you are OOC in Total RP 3." or "Paused · waiting for Total RP 3 status."
+        return pending and (reason .. " Settings cleanup waits until combat ends.") or reason
+    end
     if failed then return "Filtering stopped · /acq status for details." end
     if not active then return InCombatLockdown() and "Waiting for combat to end before enabling name displays." or "Preparing name displays…" end
     if ns.GameSettings.NamesOnlyPending() and InCombatLockdown() then return "Waiting for combat to finish applying Show only name." end
@@ -324,6 +329,7 @@ function ns.SetNickname(guid, nickname)
 end
 local function Status()
     ns.Say(ns.version .. " | " .. (active and "enabled" or "disabled") .. " | TRP3 optional")
+    if ns.ICPauseReason(db.options) then ns.Say(ns.DisplayStatus()) end
     if ns.nativeSettingsReason then ns.Say("Instance: using native settings and accessible nameplates; restricted frames are left native.") end
     local count = 0
     for _ in pairs(db.known) do count = count + 1 end

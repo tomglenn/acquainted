@@ -1,7 +1,7 @@
 local _, ns = ...
 ns.defaults = {
     enabled = true, showFriends = false, showGuild = true, showGroup = true,
-    useTRPRelations = true, useRPNames = true, affectEnemies = false,
+    useTRPRelations = true, useRPNames = true, affectEnemies = false, onlyWhileIC = false,
     showGuildName = true, showPetNames = true, fontSize = 22, nameOffset = -40,
     metColour = "FFD100", hideMet = false, hideUnmet = false, showUnmetGuildName = false,
     unmetDisplay = "name", overlayOnly = false,
@@ -55,6 +55,20 @@ end
 -- be styled. Group recognition is handled per player, not as a global pause.
 function ns.NativeSettingsReason()
     if IsInInstance and IsInInstance() then return "instance" end
+end
+
+-- Use TRP3's own status interpretation, including its default IC state.
+-- A present but unready API pauses displays until the next service pass.
+function ns.ICPauseReason(options)
+    if not options.onlyWhileIC then return nil end
+    local addon = AddOn_TotalRP3
+    if not addon and not TRP3_API then return nil end
+    local ok, inCharacter = pcall(function()
+        local player = addon.Player.GetCurrentUser()
+        return player:IsInCharacter()
+    end)
+    if not ok or not ns.IsReadable(inCharacter) or type(inCharacter) ~= "boolean" then return "unavailable" end
+    if not inCharacter then return "ooc" end
 end
 
 function ns.PlayerLabel(known, options, name)
